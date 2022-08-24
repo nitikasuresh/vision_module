@@ -12,6 +12,10 @@ REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
 if __name__ == "__main__":
+    """
+    This file picks up and object and places it at a hard-coded location. The
+    object location is determined by a mouse click on the image.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--intrinsics_file_path", type=str, default=REALSENSE_INTRINSICS
@@ -24,8 +28,8 @@ if __name__ == "__main__":
 
     print("Opening Grippers")
     # Open Gripper
+    fa.close_gripper()
     fa.open_gripper()
-
     # Reset Pose
     fa.reset_pose()
     # Reset Joints
@@ -45,6 +49,7 @@ if __name__ == "__main__":
             print("x = %d, y = %d" % (x, y))
             param[0] = x
             param[1] = y
+            cv2.destroyAllWindows()
 
     cv2.namedWindow("image")
     cv2.imshow("image", rgb_image)
@@ -87,15 +92,28 @@ if __name__ == "__main__":
     fa.goto_pose(object_center_pose, 5, force_thresholds=[10, 10, 10, 10, 10, 10])
 
     # Close Gripper
-    fa.goto_gripper(0.045, grasp=True, force=10.0)
+    # fa.goto_gripper(0.045, grasp=True, force=10.0)
+    fa.goto_gripper(0.02, grasp=True, force=10.0)
 
     # Move to intermediate robot pose
     fa.goto_pose(intermediate_robot_pose)
 
-    fa.goto_pose(object_center_pose, 5, force_thresholds=[10, 10, 20, 10, 10, 10])
+    # define place pose
+    place_pose = fa.get_pose()
+    place_pose.translation = [0.55, 0, object_z_height,]
 
-    print("Opening Grippers")
+    place_intermediate_pose = place_pose.copy()
+    place_intermediate_pose.translation = [
+        0.55,
+        0,
+        intermediate_pose_z_height,
+    ]
+
+    fa.goto_pose(place_intermediate_pose)
+    fa.goto_pose(place_pose, 5, force_thresholds=[10, 10, 20, 10, 10, 10])
+
     # Open Gripper
+    print("Opening Grippers")
     fa.open_gripper()
 
     fa.goto_pose(intermediate_robot_pose)
