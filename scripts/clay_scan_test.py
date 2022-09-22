@@ -3,6 +3,7 @@ import numpy as np
 import argparse
 import cv2
 import math
+import random
 import pyrealsense2 as rs
 from cv_bridge import CvBridge
 from autolab_core import RigidTransform, Point
@@ -24,27 +25,28 @@ if __name__ == "__main__":
 	
 	# reset pose and joints
 	fa = FrankaArm()
-	# fa.reset_pose()
-	# fa.reset_joints()
+	fa.reset_pose()
+	fa.reset_joints()
 
-	# move to middle scanning position
-	pose = fa.get_pose()
-	pose.translation = np.array([0.6, 0, 0.5])
-	fa.goto_pose(pose)
+	# loop for 10 random actions
+	for i in range(5):
+		# move to middle scanning position
+		pose = fa.get_pose()
+		pose.translation = np.array([0.6, 0, 0.5])
+		fa.goto_pose(pose)
 
-	# begin scanning blocks based on colors
-	cv_bridge = CvBridge()
-	realsense_intrinsics = CameraIntrinsics.load(args.intrinsics_file_path)
-	realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
+		# begin scanning blocks based on colors
+		cv_bridge = CvBridge()
+		realsense_intrinsics = CameraIntrinsics.load(args.intrinsics_file_path)
+		realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
 
-	# get a stream of images
-	while True:
 		current_pose = fa.get_pose()
 
 		color_image = get_realsense_rgb_image(cv_bridge)
 		depth_image = get_realsense_depth_image(cv_bridge)
 		object_image_position = np.array([200, 300])
 		blur_image = cv2.GaussianBlur(color_image, (5,5),5)
+		img = color_image
 
 		# adaptive thresholding on greyscale image
 		gray = cv2.cvtColor(blur_image, cv2.COLOR_BGR2GRAY)
@@ -69,7 +71,7 @@ if __name__ == "__main__":
 		# draw/calculate the centers of objects
 		for cnt in contours:
 			area = cv2.contourArea(cnt)
-			if area > 800:
+			if area > 300:
 				print("\n\nfinding center...")
 				# compute the center of the contour
 				M = cv2.moments(cnt)
@@ -102,5 +104,30 @@ if __name__ == "__main__":
 		# Show the images
 		cv2.imshow("Image", color_image)
 		cv2.imshow("Res Color", res_color)
+		cv2.waitKey(500)
 
-		cv2.waitKey(1)
+		# Save the raw color image to images folder
+		filename = "scripts/Images/shape_test_" + str(i) + ".jpg"
+		cv2.imwrite(filename, img)
+
+		# NOTE: have a popup that has the user approve the location/grasp width (replace this with the GUI control)
+		
+		# Move down and close gripper
+		random_x = random.randint(-2, 2)/100.0
+		width = random.randint(3, 6)/100.0
+		z_clipped = np.clip(object_center_point_in_world[2]/1.5, a_min=0.014, a_max=None)
+		ee_location = np.array([object_center_point_in_world[0]+random_x, object_center_point_in_world[1], z_clipped])
+		
+		# print("\nLocation = ", ee_location)
+		# print("Gripper Width = ", width)
+		# input("Press ENTER to approve the above location...")
+
+		pose = fa.get_pose()
+		pose.translation = ee_location
+		fa.goto_pose(pose)
+		fa.goto_gripper(width)
+		fa.open_gripper()
+
+	pose = fa.get_pose()
+	pose.translation = np.array([0.6, 0, 0.5])
+	fa.goto_pose(pose)
