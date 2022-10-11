@@ -1,5 +1,7 @@
 # camera-calibration
 
+This is a software package adopted from the IAM Lab's camera-calibration software.
+
 ## Installation
 
 1. Clone the following repository:

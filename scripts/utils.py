@@ -94,15 +94,7 @@ def get_object_center_point_in_world_realsense(
         "realsense_ee",
     )
     object_depth = depth_image[object_image_center_y, object_image_center_x] * 0.001
-    print(
-        "x, y, z: ({:.4f}, {:.4f}, {:.4f})".format(
-            object_image_center_x, object_image_center_y, object_depth
-        )
-    )
-
     object_center_point_in_world = current_pose * transform * intrinsics.deproject_pixel(
         object_depth, object_center
     )
-    print(object_center_point_in_world)
-
     return object_center_point_in_world
