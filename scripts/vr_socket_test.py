@@ -13,6 +13,7 @@ from frankapy.utils import min_jerk, min_jerk_weight
 import rospy
 import UdpComms as U
 import time
+# import threading
 
 import argparse
 import cv2
@@ -36,6 +37,16 @@ from utils import *
 # 0.6 in one step), which since the gripper and pose are decoupled can cause the timings to mis-align
 
 if __name__ == "__main__":
+
+	# Multithreading notes:
+		# def task1(): define what needs to run on one thread
+		# def task2(): define what needs to run on the other thread
+		# t1 = threading.Thread(target=task1, name='t1')
+		# t2 = threading.Thread(target=task2, name='t2')
+		# t1.start()
+		# t2.start()
+		# t1.join()
+		# t2.join()
 
 	fa = FrankaArm()
 	fa.reset_joints()
