@@ -15,6 +15,12 @@ REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
 if __name__ == "__main__":
+	"""
+	This is a script that will scan for the clay in the middle of the workspace,
+	identify the outline and center point using classical CV methods, then
+	randomly execute 10 grasp squish actions about the clay. This is a great
+	script for testing gripper fingertips, etc.
+	"""
 	# load in arguments
 	parser = argparse.ArgumentParser()
 	parser.add_argument(

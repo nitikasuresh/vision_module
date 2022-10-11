@@ -14,6 +14,11 @@ REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
 if __name__ == "__main__":
+	"""
+	This script uses classical CV methods to find the outlines of the objects in
+	the scene as well as their x,y,z coordinates in the robot frame.
+	"""
+
 	# load in arguments
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
