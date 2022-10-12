@@ -22,7 +22,7 @@ class DetectObject:
 	need to be modified to handle multiple camera inputs!!!!
 	"""
 
-	def __init__(self, object_class):
+	def __init__(self, object_id, object_class):
 		"""
 		"""
 		# load in arguments
@@ -35,6 +35,7 @@ class DetectObject:
 
 		self.realsense_intrinsics = CameraIntrinsics.load(args.intrinsics_file_path)
 		self.realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
+		self.object_id = object_id
 		self.object_class = object_class 
 
 	def get_position_image(self, color_image, depth_image, object_bounds, robot_pose):
@@ -55,7 +56,7 @@ class DetectObject:
         	in the robot's coordinate frame
 		"""
 
-		# crop the image and depth information using the object_bounds
+		# crop the image and depth information using the object_bounds -- actually mask image to preserve original image size!!!!
 
 		# TODO: make the z position robust to depth uncertainty!!!!!
 			# store up the depth prediction from multiple points/multiple frames & get the average
@@ -76,28 +77,55 @@ class DetectObject:
 		cv2.drawContours(cont_mask, contours, -1, color=(255,255,255), thickness = cv2.FILLED)
 		cv2.imshow("Contours", cont_mask)
 
-		print("\nN Contours: ", len(contours))
+		# threshold to only list contours above a certain area - after this, should only have 1!!!!
+		# print("\nCountour: ", contours)
+
+		# print("\nN Contours: ", len(contours))
 
 		# draw/calculate the centers of objects
 		for cnt in contours:
 			area = cv2.contourArea(cnt)
 			if area > 800:
-				print("\n\nfinding center...")
 				# compute the center of the contour
 				M = cv2.moments(cnt)
 				cX = int(M["m10"] / M["m00"])
 				cY = int(M["m01"] / M["m00"])
+				width = int(np.sqrt(area)/8)
 
-				object_center_point_in_world = get_object_center_point_in_world_realsense(
+				pixel_pairs = []
+				cx_start = cX - width
+				cy_start = cY - width
+				for i in range(2*width):
+					x = cx_start + i
+					for j in range(2*width):
+						y = cy_start + j
+						pixel_pairs.append([x,y])
+
+				object_center_point_in_world, variance = get_object_center_point_in_world_realsense_robust(
 					cX,
 					cY,
+					pixel_pairs,
 					depth_image,
 					self.realsense_intrinsics,
 					self.realsense_to_ee_transform,
 					robot_pose)
 
-				object_center_point = np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]])
+				# if variance is too high, then ignore z position update
+				if variance > 1e-4:
+					print("high variance....ignore z update")
+					object_center_point = np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point[2]])
+				else:
+					object_center_point = np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]])
 
+		# UPDATE:
+			# 1) get an array of pixel pairs on the surface of the object 
+			# (perhaps contour perimeter & center, perhaps random samples from middle)
+
+			# 2) pass in the depth image
+
+			# 3) have a new function that gets the object point in world that estimates the z point from these multiple samples
+
+			# 4) have a check if there is a large variation in z prediction and if so, estimate z without depth
 		return object_center_point
 
 	def get_position_apriltag(self, color_image, depth_image, object_bounds, robot_pose):

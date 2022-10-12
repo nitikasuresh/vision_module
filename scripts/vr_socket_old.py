@@ -36,44 +36,6 @@ from utils import *
 # gripper closing can lag behind because the step size between trajectory points is quite large (e.g. 0.8 to 
 # 0.6 in one step), which since the gripper and pose are decoupled can cause the timings to mis-align
 
-def vision():
-	# scan for a block
-	REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
-	REALSENSE_EE_TF = "calib/realsense_ee.tf"
-	parser = argparse.ArgumentParser()
-	parser.add_argument(
-		"--intrinsics_file_path", type=str, default=REALSENSE_INTRINSICS
-	)
-	parser.add_argument("--extrinsics_file_path", type=str, default=REALSENSE_EE_TF)
-	args = parser.parse_args()
-
-	# begin scanning blocks based on colors
-	cv_bridge = CvBridge()
-	realsense_intrinsics = CameraIntrinsics.load(args.intrinsics_file_path)
-	realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
-
-	# create image class
-	detection = DetectObject(object_id=0, object_class="block")
-
-	while True:
-		current_pose = fa.get_pose()
-
-		color_image = get_realsense_rgb_image(cv_bridge)
-		depth_image = get_realsense_depth_image(cv_bridge)
-
-		# meaningless right now - placeholder for updates to the class
-		object_bounds = [0,0]
-
-		object_center_point = detection.get_position_image(color_image, depth_image, object_bounds, current_pose)
-		
-		string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
-		print("\nBlock Position: ", object_center_point)
-
-
-
-# def control():
-
-
 if __name__ == "__main__":
 
 	# Multithreading notes:
@@ -114,9 +76,6 @@ if __name__ == "__main__":
 	pose.translation = np.array([0.6, 0, 0.5])
 	fa.goto_pose(pose)
 
-
-
-	# ---- remove for multithreading -----
 	# scan for a block
 	REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 	REALSENSE_EE_TF = "calib/realsense_ee.tf"
@@ -132,21 +91,55 @@ if __name__ == "__main__":
 	realsense_intrinsics = CameraIntrinsics.load(args.intrinsics_file_path)
 	realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
 
-	# create image class
-	detection = DetectObject(object_id=0, object_class="block")
-
 	current_pose = fa.get_pose()
 
 	color_image = get_realsense_rgb_image(cv_bridge)
 	depth_image = get_realsense_depth_image(cv_bridge)
+	blur_image = cv2.GaussianBlur(color_image, (5,5),5)
 
-	# meaningless right now - placeholder for updates to the class
-	object_bounds = [0,0]
+	# adaptive thresholding on greyscale image
+	gray = cv2.cvtColor(blur_image, cv2.COLOR_BGR2GRAY)
+	thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 25, 6) #25, 6
+	kernal = np.ones((5,5), "uint8")
+	gray_mask = cv2.dilate(thresh, kernal)
 
-	object_center_point = detection.get_position_image(color_image, depth_image, object_bounds, current_pose)
-	string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
-	print("\nBlock Position: ", object_center_point)
-	
+	# create contours
+	contours, hierarchy = cv2.findContours(gray_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	cont_mask = np.zeros(gray_mask.shape, dtype='uint8')
+	cv2.drawContours(cont_mask, contours, -1, color=(255,255,255), thickness = cv2.FILLED)
+	cv2.imshow("Contours", cont_mask)
+
+	print("\nN Contours: ", len(contours))
+	block_position = ""
+
+	# draw/calculate the centers of objects
+	for cnt in contours:
+		area = cv2.contourArea(cnt)
+		if area > 800:
+			print("\n\nfinding center...")
+			# compute the center of the contour
+			M = cv2.moments(cnt)
+			cX = int(M["m10"] / M["m00"])
+			cY = int(M["m01"] / M["m00"])
+
+			object_center_point_in_world = get_object_center_point_in_world_realsense(
+				cX,
+				cY,
+				depth_image,
+				realsense_intrinsics,
+				realsense_to_ee_transform,
+				current_pose)
+
+			object_center_point_in_world = np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]])
+
+			block_position = "{:0.2f}\t{:0.2f}\t{:0.2f}".format(object_center_point_in_world[0]-0.6, object_center_point_in_world[1], object_center_point_in_world[2])
+			print("\nBlock Position: ", block_position)
+			string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2])
+
+			# draw contours, COM and area on color image
+			cv2.circle(color_image, (cX, cY), 7, (255,255,255), -1)
+			cv2.putText(color_image, string, (cX - 30, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+			cv2.waitKey(5)
 	intialize = True
 
 	while True:
@@ -245,10 +238,54 @@ if __name__ == "__main__":
 
 			color_image = get_realsense_rgb_image(cv_bridge)
 			depth_image = get_realsense_depth_image(cv_bridge)
+			blur_image = cv2.GaussianBlur(color_image, (5,5),5)
 
-			# meaningless right now - placeholder for updates to the class
-			object_bounds = [0,0]
+			# adaptive thresholding on greyscale image
+			gray = cv2.cvtColor(blur_image, cv2.COLOR_BGR2GRAY)
+			thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 25, 6) #25, 6
+			kernal = np.ones((5,5), "uint8")
+			gray_mask = cv2.dilate(thresh, kernal)
 
-			object_center_point = detection.get_position_image(color_image, depth_image, object_bounds, current_pose)
-			string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
-			print("\nBlock Position: ", object_center_point)
+			# create contours
+			contours, hierarchy = cv2.findContours(gray_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+			cont_mask = np.zeros(gray_mask.shape, dtype='uint8')
+			cv2.drawContours(cont_mask, contours, -1, color=(255,255,255), thickness = cv2.FILLED)
+			cv2.imshow("Contours", cont_mask)
+
+			print("\nN Contours: ", len(contours))
+
+			# draw/calculate the centers of objects
+			for cnt in contours:
+				area = cv2.contourArea(cnt)
+				if area > 800:
+					print("\n\nfinding center...")
+					# compute the center of the contour
+					M = cv2.moments(cnt)
+					cX = int(M["m10"] / M["m00"])
+					cY = int(M["m01"] / M["m00"])
+
+					old_object_center_point_in_world = object_center_point_in_world
+
+					object_center_point_in_world = get_object_center_point_in_world_realsense(
+						cX,
+						cY,
+						depth_image,
+						realsense_intrinsics,
+						realsense_to_ee_transform,
+						current_pose)
+
+					object_center_point_in_world = np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]])
+
+					# if np.linalg.norm(old_object_center_point_in_world - object_center_point_in_world) > 0.1:
+					# 	object_center_point_in_world = old_object_center_point_in_world
+
+					block_position = "{:0.2f}\t{:0.2f}\t{:0.2f}".format(object_center_point_in_world[0]-0.6, object_center_point_in_world[1], object_center_point_in_world[2])
+					print("\nBlock Position: ", block_position)
+					string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2])
+
+					# draw contours, COM and area on color image
+					# cv2.circle(color_image, (cX, cY), 7, (255,255,255), -1)
+					# cv2.putText(color_image, string, (cX - 30, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+					# cv2.waitKey(1)
+
+		# define the block position & if you see the block then update!!!
