@@ -1,6 +1,8 @@
 import pickle as pkl
 import numpy as np
 
+from DetectObject import DetectObject
+
 from autolab_core import RigidTransform
 from frankapy import FrankaArm, SensorDataMessageType
 from frankapy import FrankaConstants as FC
@@ -13,7 +15,8 @@ from frankapy.utils import min_jerk, min_jerk_weight
 import rospy
 import UdpComms as U
 import time
-# import threading
+import threading
+import queue
 
 import argparse
 import cv2
@@ -95,7 +98,7 @@ if __name__ == "__main__":
 
 	print('start socket')
 	#change IP
-	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.22.111", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.90.96", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 
 	i = 0
 	dt = 0.02
@@ -144,16 +147,21 @@ if __name__ == "__main__":
 	object_bounds = [0,0]
 
 	object_center_point = detection.get_position_image(color_image, depth_image, object_bounds, current_pose)
-	string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
+	obj_string = "{:f},{:f},{:f}".format(-object_center_point[1], object_center_point[2], object_center_point[0])
 	print("\nBlock Position: ", object_center_point)
 	
 	intialize = True
 
 	while True:
-		if block_position != "":
-			sock.SendData(block_position) # Send this string to other application
+		if obj_string != "":
+			new_message = obj_string + '\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0,0'
+			sock.SendData(new_message) # Send this string to other application
+
+			# print("New Message: ", new_message)
 		
 		data = sock.ReadReceivedData() # read data
+
+		# print("Data: ", data)
 
 		if data != None: # if NEW data has been received since last ReadReceivedData function call
 			print(data)
@@ -250,5 +258,5 @@ if __name__ == "__main__":
 			object_bounds = [0,0]
 
 			object_center_point = detection.get_position_image(color_image, depth_image, object_bounds, current_pose)
-			string = "({:0.2f}, {:0.2f}, {:0.2f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
+			obj_string = "{:f},{:f},{:f}".format(-object_center_point[1], object_center_point[2], object_center_point[0])
 			print("\nBlock Position: ", object_center_point)

@@ -107,6 +107,16 @@ def _reject_outliers(data, m=2):
     s = d / (mdev if mdev else 1.)
     return data[s < m]
 
+def get_object_center_point_in_world_realsense_3D_camera_point(
+    object_camera_point,
+    intrinsics,
+    transform,
+    current_pose):
+
+    object_camera_point = Point(object_camera_point, "realsense_ee")
+    object_center_point_in_world = current_pose * transform * object_camera_point
+    return object_center_point_in_world
+
 def get_object_center_point_in_world_realsense_robust(
     object_image_center_x,
     object_image_center_y,
@@ -153,7 +163,7 @@ def get_object_center_point_in_world_realsense_robust(
     # print("\nAll Object Points: ", object_points)
 
     # original method
-    # print("\nOriginal Based on Center Point: ", np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]]))
+    print("\nOriginal Based on Center Point: ", np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]]))
     
     # naiively averaging the x,y,z to get the final point
     center_point = np.mean(object_points, axis=1)
