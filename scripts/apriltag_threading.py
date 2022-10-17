@@ -113,7 +113,80 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 			# --------- added code to calculate AprilTag x,y,z position ------
 			bounds = np.array([ptA, ptB, ptC, ptD])
 			obj = detected_objects[obj_id]
-			object_center_point = obj.get_position_apriltag(bounds, verts, current_pose)
+			translation_matrix = d.pose_t
+			translation_matrix = np.array(translation_matrix).reshape(3)
+			object_center_point = obj.get_position_apriltag(bounds, verts, current_pose, translation_matrix)
+
+			# # ----------- calculate AprilTag x,y,z position without depth data -------
+			
+			# center_info = get_object_center_point_in_world_realsense_3D_camera_point(translation_matrix, realsense_intrinsics, realsense_to_ee_transform, current_pose)
+			# center_info = np.array([center_info[0], center_info[1], center_info[2]])
+			# center_info[2]+=0.03
+
+
+
+
+
+			# # if depth-based prediction is Nan, only use non-depth-based prediction
+			# if np.isnan(object_center_point.any()):
+			# 	# scale the no-depth y estimate to account for some linear error we determined experimentally
+			# 	delta_y = -0.22*center_info[2] + 0.11
+			# 	center_info[1]-=delta_y
+
+			# 	object_center_point = center_info
+
+			# # if the prediction difference between depth and no depth is large, weight no depth more
+			# elif abs(object_center_point[2] - center_info[2]) > 0.1:
+			# 	object_center_point[2] = center_info[2]
+
+			# 	# scale the no-depth y estimate to account for some linear error we determined experimentally
+			# 	delta_y = -0.22*object_center_point[2] + 0.11
+			# 	center_info[1]-=delta_y
+
+			# 	# weighted average
+			# 	object_center_point[0] = (object_center_point[0] + 2*center_info[0])/3
+			# 	object_center_point[1] = (object_center_point[1] + center_info[1])/2
+			# else:
+			# 	# scale the no-depth y estimate to account for some linear error we determined experimentally
+			# 	delta_y = -0.22*object_center_point[2] + 0.11
+			# 	center_info[1]-=delta_y
+
+			# 	# weighted average
+			# 	object_center_point[0] = (object_center_point[0] + center_info[0])/2
+			# 	object_center_point[1] = (9*object_center_point[1] + center_info[1])/10
+			# 	object_center_point[2] = (5*object_center_point[2] + center_info[2])/6
+
+
+
+
+
+			# # if depth-based prediction is Nan, only use non-depth-based prediction
+			# if np.isnan(object_center_point.any()):
+			# 	object_center_point = center_info
+			# # if the prediction difference between depth and no depth is large ignore depth-based z
+			# elif abs(object_center_point[2] - center_info[2]) > 0.1:
+			# 	object_center_point[2] = center_info[2]
+
+			# # scale the no-depth y estimate to account for some linear error we determined experimentally
+			# delta_y = -0.22*object_center_point[2] + 0.11
+			# center_info[1]-=delta_y
+
+			# # print("\nCenter Point No Depth: ", center_info)
+			# # print("Center Point Depth: ", object_center_point)
+
+			# # weighted average
+			# object_center_point[0] = (object_center_point[0] + center_info[0])/2
+			# object_center_point[1] = (object_center_point[1] + center_info[1])/2
+			# object_center_point[2] = (2*object_center_point[2] + center_info[2])/3
+
+
+
+
+
+
+
+
+			# print("Weighted Average COM: ", object_center_point)
 
 			string = "({:0.4f}, {:0.4f}, {:0.4f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
 			cv2.putText(color_image, string, (cX - 30, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
@@ -129,7 +202,15 @@ def position_loop(object_queue):
 	while True:
 		detected_objects = object_queue.get()
 		for obj_id in detected_objects:
-			print("\nObject ID: ", obj_id, " Current Position: ", detected_objects[obj_id].return_current_position())
+			print("\nObject ID: ", obj_id, " Current Position: ", detected_objects[obj_id]._return_current_position())
+			# print("\n")
+			# velocity = detected_objects[obj_id]._return_current_velocity()
+			# rotation = detected_objects[obj_id]._return_current_rotation()
+			# ang_velocity = detected_objects[obj_id]._return_current_ang_velocity()
+
+			# color = detected_objects[obj_id]._return_color()
+			# type = detected_objects[obj_id]._return_type()
+			# size = detected_objects[obj_id]._return_size()
 
 if __name__ == "__main__":
 	# load in arguments
@@ -164,8 +245,4 @@ if __name__ == "__main__":
 	vision.start()
 	position_tracking.start()
 	# vision.join()
-	
-
-	# print("\nDetected Objects: ", detected_objects)
-	# print("Element: ", [detected_objects[6].object_id, detected_objects[6].object_class, detected_objects[6].object_center_point])
-	# print("Final COM: ", detected_objects[6].return_current_position())
+	# position_tracking.join()

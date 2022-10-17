@@ -38,12 +38,37 @@ class DetectObject:
 		self.object_id = object_id
 		self.object_class = object_class 
 
-		# initialize object center point to zero
+		# initialize object position, velocity, rotation, angular velocity all to zero
 		self.object_center_point = np.array([0,0,0])
+		self.object_velocity = np.array([0,0,0])
+		self.object_rotation = np.array([0,0,0,0])
+		self.object_ang_velocity = np.array([0,0,0])
 
-	def return_current_position(self):
+		# size, color, type 
+		self.size = "0.03,0.03,0.03" #[m]
+		self.color = "0,0,255,1"
+		self.type = "block"
+
+	def _return_current_position(self):
 		return self.object_center_point
-		# np.array([self.object_center_point[0], self.object_center_point[1], self.object_center_point[2]])
+
+	def _return_current_velocity(self):
+		return self.object_velocity
+
+	def _return_current_rotation(self):
+		return self.object_rotation
+
+	def _return_current_ang_velocity(self):
+		return self.object_ang_velocity
+	
+	def _return_size(self):
+		return self.size 
+
+	def _return_color(self):
+		return self.color 
+
+	def _return_type(self):
+		return self.type
 
 	def get_position_image(self, color_image, depth_image, object_bounds, robot_pose):
 		"""
@@ -136,7 +161,7 @@ class DetectObject:
 			# 4) have a check if there is a large variation in z prediction and if so, estimate z without depth
 		return self.object_center_point
 
-	def get_position_apriltag(self, bounds, verts, robot_pose):
+	def get_position_apriltag(self, bounds, verts, robot_pose, translation_matrix):
 		"""
 		Estimate the object position in the robot's frame given the image, depth,
 		object bounds and current robot pose based on AprilTag detection.
@@ -153,11 +178,8 @@ class DetectObject:
         object_center_point: the x,y,z coordinate of the center of the object
         	in the robot's coordinate frame
 		"""
-		
 
-		# NOTE: maybe assume that this is passing in the contour/detection object of the specific apriltag????
-
-		# given each specific apriltag bounding box, and robot pose, calculate and return the object x,y,z
+		# CODE BELOW USING POINT CLOUD TO ESTIMATE X,Y,Z - SUSCEPTIBLE TO DEPTH ERRORS AT CLOSE DISTANCES!!!!
 
 		minx = np.amin(bounds[:,0], axis=0)
 		maxx = np.amax(bounds[:,0], axis=0)
@@ -181,15 +203,30 @@ class DetectObject:
 		median_point = np.array([x_pos, y_pos, z_pos])
 		object_median_point = get_object_center_point_in_world_realsense_3D_camera_point(median_point, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
 
-		# if variance > 0.015:
-		if variance > 0.02:
-			# print("High variance in z, ignore estimate...")
-			self.object_center_point = np.array([object_median_point[0], object_median_point[1], self.object_center_point[2]])
-		else:
-			self.object_center_point = object_median_point
+		# if variance > 0.02:
+		# 	self.object_center_point = np.array([object_median_point[0], object_median_point[1], self.object_center_point[2]])
+		# else:
+		# 	self.object_center_point = np.array([object_median_point[0], object_median_point[1], object_median_point[2]])
 
-		# print("Object Median Point: ", object_median_point)
-		# print("Variance: ", variance)
+		com_depth = np.array([object_median_point[0], object_median_point[1], object_median_point[2]])
+
+		com_nodepth = get_object_center_point_in_world_realsense_3D_camera_point(translation_matrix, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
+		com_nodepth = np.array([com_nodepth[0], com_nodepth[1], com_nodepth[2]])
+		com_nodepth[2]+=0.03
+
+		# if depth-based prediction is Nan, only use non-depth-based prediction
+		if np.isnan(com_depth.any()):
+			com_depth = com_nodepth
+		# if the prediction difference between depth and no depth is large ignore depth-based z
+		elif abs(com_depth[2] - com_nodepth[2]) > 0.1:
+			com_depth[2] = com_nodepth[2]
+
+		# scale the no-depth y estimate to account for some linear error we determined experimentally
+		delta_y = -0.22*com_depth[2] + 0.11
+		com_nodepth[1]-=delta_y
+
+		# weighted average
+		self.object_center_point = np.array([(com_depth[0] + com_nodepth[0])/2, (com_depth[1] + com_nodepth[1])/2, (2*com_depth[2] + com_nodepth[2])/3])
 
 		return self.object_center_point
 
