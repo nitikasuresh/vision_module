@@ -20,11 +20,8 @@ from autolab_core import RigidTransform, YamlConfig
 # from perception_utils.apriltags import AprilTagDetector
 # from perception_utils.realsense import get_first_realsense_sensor
 
-# REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
-# REALSENSE_EE_TF = "calib/realsense_ee.tf"
-
-REALSENSE_INTRINSICS = "calib/realsense_static_intrinsics.intr"
-REALSENSE_EE_TF = "calib/realsense_static.tf"
+REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
+REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
 def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_objects, object_queue):
 	# ----- Non-ROS vision attempt
@@ -34,8 +31,7 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 	# Configure depth and color streams
 	pipeline = rs.pipeline()
 	config = rs.config()
-	# config.enable_device('220222066259')
-	config.enable_device('151322061880')
+	config.enable_device('220222066259')
 	config.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
 	config.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
 
@@ -84,21 +80,14 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 		detections = detector.detect(bw_image, estimate_tag_pose=True, camera_params=cam_param, tag_size=0.03)
 		# print("\nNumber of AprilTags: ", len(detections))
 
-
-		# ------- SECOND CAMERA NOTES -------
-		# loop over the detections from both cameras (some kind of list of tuples?)
-		# where if both cameras detected the same tag, then do everything else the same?
-
-
-
-
-
 		# loop over the detected AprilTags
 		for d in detections:
 
 			# check if apriltag has been detected before
 			obj_id = d.tag_id
+			# if detected_objects.has_key(obj_id) == False:
 			if obj_id not in detected_objects:
+				# print("add to dictionary")
 				# add tag to the dictionary of detected objects
 				tagFamily = d.tag_family.decode("utf-8")
 				detected_objects.update({obj_id : DetectObject(object_id=obj_id, object_class=tagFamily)})
@@ -126,14 +115,22 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 			obj = detected_objects[obj_id]
 			translation_matrix = d.pose_t
 			translation_matrix = np.array(translation_matrix).reshape(3)
-			rotation_matrix = d.pose_R
+			rotation_matrix = np.array(d.pose_R)
 			pose_error = d.pose_err
+			block_offset_vector = np.array([[0],[0],[0.015]])
 			object_center_point = obj.get_position_apriltag(bounds, verts, current_pose, translation_matrix)
-
-			print("\nTranslation: ", translation_matrix)
-
-			string = "({:0.4f}, {:0.4f}, {:0.4f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
+			disp_center_point = obj.get_position_apriltag(bounds, verts, current_pose, translation_matrix, rotation_matrix) # , block_offset_vector)
+			# new_center = get_object_center_point_in_camera_pixels(object_center_point, realsense_intrinsics, realsense_to_ee_transform, current_pose)
+			# print(new_center)
+			# print(np.array(d.pose_R))
+			# cv2.circle(color_image, (new_center[0], new_center[1]), 5, (0, 255, 0), -1)
+			print('offset:',disp_center_point - object_center_point, np.linalg.norm(disp_center_point - object_center_point))
+			intial_rotation = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+			print(current_pose.rotation@realsense_to_ee_transform.rotation@rotation_matrix@np.linalg.inv(intial_rotation))
+			string = "t({:0.4f}, {:0.4f}, {:0.4f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
+			disp_string = "c({:0.4f}, {:0.4f}, {:0.4f}) [m]".format(disp_center_point[0], disp_center_point[1], disp_center_point[2])
 			cv2.putText(color_image, string, (cX - 30, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+			cv2.putText(color_image, disp_string, (cX - 30, cY - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
 		# put updated dictionary in queue for other thread to access
 		object_queue.put(detected_objects)
@@ -163,13 +160,12 @@ if __name__ == "__main__":
 		"--intrinsics_file_path", type=str, default=REALSENSE_INTRINSICS
 	)
 	parser.add_argument("--extrinsics_file_path", type=str, default=REALSENSE_EE_TF)
-	# parser.add_argument("--extrinsics_static_file_path", type=str, default=REALSENSE_STATIC_TF)
 	args = parser.parse_args()
 	
 	# reset pose and joints
 	fa = FrankaArm()
-	fa.reset_pose()
-	fa.reset_joints()
+	# fa.reset_pose()
+	# fa.reset_joints()
 
 	# # move to center
 	# pose = fa.get_pose()
@@ -179,11 +175,8 @@ if __name__ == "__main__":
 
 	realsense_intrinsics = CameraIntrinsics.load(args.intrinsics_file_path)
 	realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
-	# realsense_to_static_transform = RigidTransform.load(args.extrinsics_static_file_path)
-
 	# print("\nCamera Intrinsics: ", realsense_intrinsics)
 	# print("\nTransform: ", realsense_to_ee_transform)
-	# print("\nStatic Transform: ", realsense_to_static_transform)
 
 	# assert False
 
@@ -198,6 +191,6 @@ if __name__ == "__main__":
 	vision = threading.Thread(target=vision_loop, args=(realsense_intrinsics,realsense_to_ee_transform, detected_objects, object_queue))
 	position_tracking = threading.Thread(target=position_loop, args=(object_queue,))
 	vision.start()
-	position_tracking.start()
+	# position_tracking.start()
 	# vision.join()
 	# position_tracking.join()

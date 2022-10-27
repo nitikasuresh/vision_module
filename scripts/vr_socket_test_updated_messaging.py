@@ -33,6 +33,31 @@ from utils import *
 REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
+class GripperWrapper:
+	def __init__(self, fa, close_tolerance = 0.001):
+		self.fa = fa
+		self.closed = False
+		self.last_width = 0.08
+		self.close_tolerance = close_tolerance
+
+	def goto(self, width, speed):
+		cur_width = fa.get_gripper_width()
+		if cur_width - self.last_width > self.close_tolerance and self.closed:
+			squeezing = True
+		else:
+			squeezing = False
+		diff = width - fa.get_gripper_width()
+		if abs(diff) > 0.001:
+			if diff > 0 and squeezing:
+				print('stop_grip')
+				fa.stop_gripper()
+			if diff < 0:
+				self.closed = True
+			else:
+				self.closed = False
+			fa.goto_gripper(width, block=False, grasp=False, speed=speed)
+			self.last_width = width
+
 def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_objects, object_queue):
 	# ----- Non-ROS vision attempt
 	W = 848
@@ -169,6 +194,7 @@ if __name__ == "__main__":
 
 	fa = FrankaArm()
 	fa.reset_joints()
+	grip_wrapper = GripperWrapper(fa)
 
 	pose = fa.get_pose()
 	goal_rotation = pose.quaternion
@@ -176,18 +202,21 @@ if __name__ == "__main__":
 
 	print('start socket')
 	#change IP
-	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.90.96", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.17.139.10", sendIP = "172.26.89.114", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
+	inventory_list = []
 
 	i = 0
 	dt = 0.02
+	
 	rate = rospy.Rate(1 / dt)
 	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=10)
 	T = 100
 	max_speed = 1 #m/s
 
 	fa = FrankaArm()
+	print('about to reset')
 	fa.reset_joints()
 	pose = fa.get_pose()
 
@@ -214,7 +243,9 @@ if __name__ == "__main__":
 	
 	initialize = True
 	while True:
-		hand_position = fa.get_pose().translation
+		hand_pose = fa.get_pose()
+		hand_position = hand_pose.translation
+		hand_rot = hand_pose.quaternion
 		finger_width = fa.get_gripper_width() # check this 
 		message_index += 1
 
@@ -227,12 +258,20 @@ if __name__ == "__main__":
 		# detected_objects = object_queue.get()
 
 		send_string = str(message_index) + '\n'
-		print('detected_objects', detected_objects)
+		# print('detected_objects', detected_objects)
+		# print('keys:', detected_objects.keys(), 'type:', type(detected_objects.keys()[0]))
+		for item in inventory_list:
+			if not (int(item)) in detected_objects.keys():
+				send_string += "_deleteItem" + '\t' + item + '\n'
+		for item in detected_objects.keys():
+			if not(str(item) in inventory_list) and not(str(item) in new_object_list):
+				new_object_list.append(str(item))
 		if len(new_object_list) != 0:
 			send_string += new_object_message(new_object_list, detected_objects)
 		for game_object in detected_objects:
 			send_string += object_message(game_object, detected_objects) + '\n'
-		send_string += '_hand\t' + str(-hand_position[1]) + ',' + str(hand_position[2]) + ',' + str(hand_position[0]-0.6) + "," + str(finger_width)
+		send_string += '_hand\t' + str(-hand_position[1]) + ',' + str(hand_position[2]) + ',' + str(hand_position[0]-0.6) +'\t'\
+			+ str(hand_rot[1]) + ',' + str(-hand_rot[2]) + ',' + str(-hand_rot[0]) + ',' + str(hand_rot[3]) + '\t' + str(finger_width)
 		# new_message = obj_string + '\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0,0'
 		sock.SendData(send_string) # Send this string to other application
 
@@ -243,19 +282,22 @@ if __name__ == "__main__":
 		# print("Data: ", data)
 
 		if data != None: # if NEW data has been received since last ReadReceivedData function call
-			print('send_string', send_string)
-			print()
-			print(data)
-			print('\n')
-			unknown_objects, gripper_data = data.split('\n')
+			# print('send_string', send_string)
+			# print()
+			# print(data)
+			# print('\n')
+			inventory, unknown_objects, gripper_data = data.split('\n')
+			inventory_list = inventory.split('\t')[1:]
 			new_object_list = unknown_objects.split('\t')[1:]
 
-			goal_position, goal_width = gripper_data.split('\t')
+			goal_position, goal_rotation, goal_width = gripper_data.split('\t')
 			cur_pose = fa.get_pose()
 			cur_position = cur_pose.translation
 			goal_position = np.array(goal_position[1:-1].split(', ')).astype(np.float)
 			goal_position = np.array([goal_position[2] + 0.6, -goal_position[0], goal_position[1] + 0.02])
-			goal_width = float(goal_width)
+			goal_rotation = np.array(goal_rotation[1:-1].split(', ')).astype(np.float)
+			goal_rotation = np.array([-goal_rotation[2], goal_rotation[0], -goal_position[1], goal_rotation[3]])
+			goal_width = 2*float(goal_width)
 
 			# clip magnitude of goal position to be within max speed bounds
 			if not initialize:
@@ -266,9 +308,9 @@ if __name__ == "__main__":
 					goal_position = max_speed*time_diff*(goal_position - cur_position)/np.linalg.norm(goal_position - cur_position) + cur_position
 
 			pose.translation = goal_position
-			# # pose.quaternion = goal_rotation
+			pose.quaternion = goal_rotation
 
-			if initialize:
+			if initialize:                   
 				# terminate active skills
 
 				fa.goto_pose(pose)
@@ -294,5 +336,6 @@ if __name__ == "__main__":
 				pub.publish(ros_msg)
 				rate.sleep()
 
+			grip_wrapper.goto(goal_width, 0.15)
 			i+=1
 			rate.sleep()

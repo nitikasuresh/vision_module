@@ -98,6 +98,21 @@ def get_object_center_point_in_world_realsense(
     )
     return object_center_point_in_world
 
+# def get_object_center_point_in_camera_pixels(
+#     NOT FUNCTIONAL
+#     object_world_location,
+#     intrinsics,
+#     transform,
+#     current_pose):
+    
+#     np_point = np.ones((4,1))
+#     np_point[0:3, 0] = object_world_location
+#     transform_matrix = ((current_pose*transform).inverse()).matrix
+#     realsense_location = transform_matrix@np_point
+#     # realsense_point[2] = 0
+#     realsense_point = Point(realsense_location[0:3, 0], "realsense_ee")
+#     return intrinsics.project(realsense_point)
+
 def _reject_outliers(data, m=2):
     """
     Helper function to reject outliers from numpy array.
@@ -114,7 +129,8 @@ def get_object_center_point_in_world_realsense_3D_camera_point(
     current_pose):
 
     object_camera_point = Point(object_camera_point, "realsense_ee")
-    object_center_point_in_world = current_pose * transform * object_camera_point
+    # object_center_point_in_world = current_pose * transform * object_camera_point
+    object_center_point_in_world = transform * object_camera_point
     return object_center_point_in_world
 
 def get_object_center_point_in_world_realsense_robust(
