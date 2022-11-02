@@ -33,6 +33,10 @@ from utils import *
 REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
+### SESSION NOTES ###
+# comment out print in utils.get_object_center_point_in_world_realsense_3D_camera_point (131)
+# comment out print in DetectObject.py (185, 196, 178)
+
 class GripperWrapper:
 	def __init__(self, fa, close_tolerance = 0.001):
 		self.fa = fa
@@ -66,6 +70,7 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 	# Configure depth and color streams
 	pipeline = rs.pipeline()
 	config = rs.config()
+	config.enable_device('220222066259')
 	config.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
 	config.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
 
@@ -202,7 +207,7 @@ if __name__ == "__main__":
 
 	print('start socket')
 	#change IP
-	sock = U.UdpComms(udpIP="172.17.139.10", sendIP = "172.26.89.114", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.90.234", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
 	inventory_list = []
@@ -212,7 +217,7 @@ if __name__ == "__main__":
 	
 	rate = rospy.Rate(1 / dt)
 	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=10)
-	T = 100
+	T = 1000
 	max_speed = 1 #m/s
 
 	fa = FrankaArm()
@@ -271,10 +276,10 @@ if __name__ == "__main__":
 		for game_object in detected_objects:
 			send_string += object_message(game_object, detected_objects) + '\n'
 		send_string += '_hand\t' + str(-hand_position[1]) + ',' + str(hand_position[2]) + ',' + str(hand_position[0]-0.6) +'\t'\
-			+ str(hand_rot[1]) + ',' + str(-hand_rot[2]) + ',' + str(-hand_rot[0]) + ',' + str(hand_rot[3]) + '\t' + str(finger_width)
+			+ str(hand_rot[2]) + ',' + str(-hand_rot[3]) + ',' + str(-hand_rot[1]) + ',' + str(hand_rot[0]) + '\t' + str(finger_width)
 		# new_message = obj_string + '\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0,0'
 		sock.SendData(send_string) # Send this string to other application
-
+		# print(send_string)
 		# print("New Message: ", new_message)
 	
 		data = sock.ReadReceivedData() # read data
@@ -296,26 +301,32 @@ if __name__ == "__main__":
 			goal_position = np.array(goal_position[1:-1].split(', ')).astype(np.float)
 			goal_position = np.array([goal_position[2] + 0.6, -goal_position[0], goal_position[1] + 0.02])
 			goal_rotation = np.array(goal_rotation[1:-1].split(', ')).astype(np.float)
-			goal_rotation = np.array([-goal_rotation[2], goal_rotation[0], -goal_position[1], goal_rotation[3]])
+			goal_rotation = np.array([goal_rotation[3], -goal_rotation[2], goal_rotation[0], -goal_rotation[1]])
 			goal_width = 2*float(goal_width)
 
+			pose.translation = goal_position
+			print(goal_position[2])
+			goal_rotation_mat = pose.rotation_from_quaternion(goal_rotation)#@np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+			pose.rotation = goal_rotation_mat
+			# fa.goto_pose(pose)
 			# clip magnitude of goal position to be within max speed bounds
 			if not initialize:
 				time_diff = timestamp - last_time
 				last_time = timestamp
-				print("Time Diff:", time_diff)
+				# print("Time Diff:", time_diff)
 				if np.linalg.norm(goal_position - cur_position) > max_speed*time_diff:
+					print('Modifying goal_position from:', goal_position)
 					goal_position = max_speed*time_diff*(goal_position - cur_position)/np.linalg.norm(goal_position - cur_position) + cur_position
+					print('To:', goal_position)
 
 			pose.translation = goal_position
-			pose.quaternion = goal_rotation
-
+			
 			if initialize:                   
 				# terminate active skills
 
 				fa.goto_pose(pose)
 				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10,
-					cartesian_impedances=[600.0, 600.0, 600.0, 50.0, 50.0, 50.0])
+					cartesian_impedances=[600.0, 600.0, 600.0, 10.0, 10.0, 10.0])
 				initialize = False
 
 				init_time = rospy.Time.now().to_time()

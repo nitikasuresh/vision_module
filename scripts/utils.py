@@ -128,9 +128,28 @@ def get_object_center_point_in_world_realsense_3D_camera_point(
     transform,
     current_pose):
 
+    print("\nUtils Transform: ", transform)
+
     object_camera_point = Point(object_camera_point, "realsense_ee")
-    # object_center_point_in_world = current_pose * transform * object_camera_point
-    object_center_point_in_world = transform * object_camera_point
+    object_center_point_in_world = current_pose * transform * object_camera_point
+    # object_center_point_in_world = transform * object_camera_point # NOTE: for second stationary camera
+    return object_center_point_in_world
+
+def get_object_center_point_in_world_realsense_3D_camera_point_multicam(
+    object_camera_point,
+    intrinsics,
+    transform,
+    current_pose,
+    ee_cam):
+
+    # if camera is mounted on end effector
+    if ee_cam:
+        object_camera_point = Point(object_camera_point, "realsense_ee")
+        object_center_point_in_world = current_pose * transform * object_camera_point
+    # camera mounted statically - do not care about the end effector current pose
+    else:
+        object_camera_point = Point(object_camera_point, "realsense_ee")
+        object_center_point_in_world = transform * object_camera_point # NOTE: for second stationary camera
     return object_center_point_in_world
 
 def get_object_center_point_in_world_realsense_robust(

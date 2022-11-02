@@ -1,11 +1,12 @@
 import cv2
 import numpy as np
 import pyrealsense2 as rs
-from cv_bridge import CvBridge
+# from cv_bridge import CvBridge
+from autolab_core import RigidTransform, Point
 
 
 # 5x8 checkerboard
-checkerboard = (5,26) # (5,8) # extended is (5,17)
+checkerboard = (5,17) # (5,26) # (5,8) # extended is (5,17)
 
 # lists of points
 objpoints = [] # 3d real-world point in robot frame
@@ -14,14 +15,19 @@ imgpoints = [] # 2d pixel point in image plane
 # ground truth x,y,z position
 pose3d = []
 
-for i in reversed(range(1,checkerboard[1]+1)):
-	x = 0.1 + i*0.03
+# for i in reversed(range(1,checkerboard[1]+1)):
+for i in range(1,checkerboard[1]+1):
+	# x = 0.1 + i*0.028
+	x = 0.34 + i*0.028
 
-	for j in reversed(range(-2,3)):
-		y = j*0.03
+	# for j in reversed(range(-2,3)):
+	for j in range(-2,3):
+		y = j*0.028
 		pose3d.append([x,y,0])
 
 pose3d = np.array(pose3d, np.float32)
+
+# print("\nPose 3d: ", pose3d)
 
 # criteria
 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -39,7 +45,7 @@ pipeline.start(config)
 aligned_stream = rs.align(rs.stream.color) # alignment between color and depth
 point_cloud = rs.pointcloud()
 
-for i in range(500):
+for i in range(10):
 	# get an image from the camera
 	frames = pipeline.wait_for_frames()
 	frames = aligned_stream.process(frames)
@@ -68,33 +74,15 @@ for i in range(500):
 		objpoints.append(pose3d)
 
 
-		# bw_image = cv2.drawChessboardCorners(bw_image, checkerboard, corners, ret)
-
-	# 	ref_image = cv2.drawChessboardCorners(color_image, checkerboard, corners_refined, ret)
-
-	# cv2.imshow('image', bw_image)
-	# cv2.imshow('refined', ref_image)
-	# cv2.waitKey(0)
-
-	# cv2.destroyAllWindows()
-
-
-
-# objpoints = np.concatenate(objpoints)
-# imgpoints = np.concatenate(imgpoints)
-
-# print("\nObjpoints shape: ", objpoints.shape)
-# print("imgpoints shape: ", imgpoints.shape)
-
-
-# stack the numpy arrays in the two lists to be a single numpy array??????
-
-
 ret, matrix, distortion, r_vecs, t_vecs = cv2.calibrateCamera(objpoints, imgpoints, bw_image.shape[::-1], None, None)
 
-# print("\nCamera Matrix: ", matrix)
+print("\nCamera Matrix: ", matrix)
 
-# print("\nDistortion: ", distortion)
+print("\nDistortion: ", distortion)
+
+# print("\nAll Rotation: ", r_vecs)
+
+# print("\nAll Translation: ", t_vecs)
 
 # print("\nRotation Vector Average: ", np.mean(r_vecs, axis=0))
 
@@ -104,15 +92,20 @@ print("\nRotation Matrix Average: ", rotation_mat)
 
 print("\nTranslation Average: ", np.mean(t_vecs, axis=0))
 
-# TODO: update realsense_static.tf to have the solved rotation and translation matrices
-# modify the DetectObject class to handle the potential for multi-camera inputs
-# compare the position prediction from wrist camera to static mounted camera to verify
-# the calibration was effective
+# swap axis the align with world frame correctly
+rvec_mean = np.mean(r_vecs, axis=0)
+print("\nAverage rotation vector: ", rvec_mean)
+print("\nUpdated Frame Rotation Vector: ", np.array([rvec_mean[2], rvec_mean[0], -rvec_mean[1]]))
+
+new_mat, _ = cv2.Rodrigues(np.array([rvec_mean[2], rvec_mean[0], -rvec_mean[1]]))
+print("\nUpdated Rotation Matrix: ", new_mat)
+
+tvec_mean = np.mean(t_vecs, axis=0)
+print("\nUpdated Frame Translation: ", np.array([tvec_mean[2], tvec_mean[0], -tvec_mean[1]]))
+
+print("\nInverse Original Rotation: ", np.linalg.inv(rotation_mat))
+
+# print("\nInverse Original Translation: ", np.linalg.inv(tvec_mean))
 
 
-
-
-
-# NOTES: There appears to be some significant variation in the rotation and translation matrices calculated
-# after each run - to account for this we can have a stream of the checkerboard for a set amount of time,
-# adding the correspondance between points to the arrays (this would account for the variation in corner detection!)
+# TODO: the calibration is wrong, appears to be a swapping of coordinates?

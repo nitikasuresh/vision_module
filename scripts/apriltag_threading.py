@@ -130,7 +130,7 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 			pose_error = d.pose_err
 			object_center_point = obj.get_position_apriltag(bounds, verts, current_pose, translation_matrix)
 
-			print("\nTranslation: ", translation_matrix)
+			# print("\nTranslation: ", translation_matrix)
 
 			string = "({:0.4f}, {:0.4f}, {:0.4f}) [m]".format(object_center_point[0], object_center_point[1], object_center_point[2])
 			cv2.putText(color_image, string, (cX - 30, cY - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
@@ -146,7 +146,8 @@ def position_loop(object_queue):
 	while True:
 		detected_objects = object_queue.get()
 		for obj_id in detected_objects:
-			print("\nObject ID: ", obj_id, " Current Position: ", detected_objects[obj_id]._return_current_position())
+			pass
+			# print("\nObject ID: ", obj_id, " Current Position: ", detected_objects[obj_id]._return_current_position())
 			# print("\n")
 			# velocity = detected_objects[obj_id]._return_current_velocity()
 			# rotation = detected_objects[obj_id]._return_current_rotation()
@@ -181,8 +182,8 @@ if __name__ == "__main__":
 	realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
 	# realsense_to_static_transform = RigidTransform.load(args.extrinsics_static_file_path)
 
-	# print("\nCamera Intrinsics: ", realsense_intrinsics)
-	# print("\nTransform: ", realsense_to_ee_transform)
+	print("\nCamera Intrinsics: ", realsense_intrinsics)
+	print("\nTransform: ", realsense_to_ee_transform)
 	# print("\nStatic Transform: ", realsense_to_static_transform)
 
 	# assert False
