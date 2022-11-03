@@ -1,28 +1,69 @@
-from frankapy import FrankaArm
+import pickle as pkl
 import numpy as np
-import argparse
-import apriltag
-from pupil_apriltags import Detector
-import cv2
-import math
-import random
+
+from DetectObjectNew import DetectObjectNew
+
+from autolab_core import RigidTransform
+from frankapy import FrankaArm, SensorDataMessageType
+from frankapy import FrankaConstants as FC
+from frankapy.proto_utils import sensor_proto2ros_msg, make_sensor_group_msg
+from frankapy.proto import PosePositionSensorMessage, ShouldTerminateSensorMessage, CartesianImpedanceSensorMessage
+from franka_interface_msgs.msg import SensorDataGroup
+
+from frankapy.utils import min_jerk, min_jerk_weight
+
+import rospy
+import UdpComms as U
+import time
 import threading
 import queue
+import apriltag
+from pupil_apriltags import Detector
+
+import argparse
+import cv2
+import math
+import pyrealsense2 as rs
 from cv_bridge import CvBridge
 from autolab_core import RigidTransform, Point
-import pyrealsense2 as rs
-from DetectObjectNew import DetectObjectNew
 
 from perception import CameraIntrinsics
 from utils import *
-
-from autolab_core import RigidTransform, YamlConfig
 
 REALSENSE_INTRINSICS_EE = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
 REALSENSE_INTRINSICS_STATIC = "calib/realsense_static_intrinsics.intr"
 REALSENSE_STATIC_TF = "calib/realsense_static.tf"
+
+### SESSION NOTES ###
+# comment out print in utils.get_object_center_point_in_world_realsense_3D_camera_point (131)
+# comment out print in DetectObject.py (185, 196, 178)
+
+class GripperWrapper:
+	def __init__(self, fa, close_tolerance = 0.001):
+		self.fa = fa
+		self.closed = False
+		self.last_width = 0.08
+		self.close_tolerance = close_tolerance
+
+	def goto(self, width, speed):
+		cur_width = fa.get_gripper_width()
+		if cur_width - self.last_width > self.close_tolerance and self.closed:
+			squeezing = True
+		else:
+			squeezing = False
+		diff = width - fa.get_gripper_width()
+		if abs(diff) > 0.001:
+			if diff > 0 and squeezing:
+				print('stop_grip')
+				fa.stop_gripper()
+			if diff < 0:
+				self.closed = True
+			else:
+				self.closed = False
+			fa.goto_gripper(width, block=False, grasp=False, speed=speed)
+			self.last_width = width
 
 def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_intrinsics_static, realsense_to_static_transform, detected_objects, object_queue):
 	# ----- Non-ROS vision attempt
@@ -242,20 +283,27 @@ def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_in
 		cv2.imshow("Image End Effctor", color_image2)
 		cv2.waitKey(1)
 
-def position_loop(object_queue):
-	while True:
-		detected_objects = object_queue.get()
-		for obj_id in detected_objects:
-			pass
-			# print("\nObject ID: ", obj_id, " Current Position: ", detected_objects[obj_id]._return_current_position())
-			# print("\n")
-			# velocity = detected_objects[obj_id]._return_current_velocity()
-			# rotation = detected_objects[obj_id]._return_current_rotation()
-			# ang_velocity = detected_objects[obj_id]._return_current_ang_velocity()
+def new_object_message(new_object_list, object_dict):
+	message = ""
+	for new_object in new_object_list:
+		new_object = int(new_object)
+		message += '_newItem\t' + object_dict[new_object]._return_type() \
+		+ '\t' + str(new_object) + '\t' + object_dict[new_object]._return_size() \
+		+ '\t' + object_dict[new_object]._return_color() + '\n'
+	return message
+ 
+def object_message(object_name, object_dict):
+	pos = object_dict[object_name]._return_current_position()
+	vel = object_dict[object_name]._return_current_velocity()
+	rot = object_dict[object_name]._return_current_rotation()
+	avel = object_dict[object_name]._return_current_ang_velocity()
+	return str(object_name) + '\t' + str(-pos[1]) + ',' + str(pos[2]) + ',' + str(pos[0]-0.6) + '\t' \
+	+ str(-vel[1]) + ',' + str(vel[2]) + ',' + str(vel[0]) + '\t' \
+	+ str(rot[1]) + ',' + str(-rot[2]) + ',' + str(-rot[0]) + ',' + str(rot[3]) + '\t' \
+	+ str(avel[1]) + ',' + str(-avel[2]) + ',' + str(-avel[0])
 
-			# color = detected_objects[obj_id]._return_color()
-			# type = detected_objects[obj_id]._return_type()
-			# size = detected_objects[obj_id]._return_size()
+# def control(object_queue, ):
+
 
 if __name__ == "__main__":
 	# load in arguments
@@ -265,15 +313,38 @@ if __name__ == "__main__":
 	parser.add_argument("--ee_extrinsics_file_path", type=str, default=REALSENSE_EE_TF)
 	parser.add_argument("--static_extrinsics_file_path", type=str, default=REALSENSE_STATIC_TF)
 	args = parser.parse_args()
-	
-	# reset pose and joints
-	fa = FrankaArm()
-	fa.reset_pose()
-	fa.reset_joints()
 
-	# move to center
+	fa = FrankaArm()
+	fa.reset_joints()
+	grip_wrapper = GripperWrapper(fa)
+
 	pose = fa.get_pose()
-	# print("\nRobot Pose: ", pose)
+	goal_rotation = pose.quaternion
+	print("Robot Resting Pose: ", pose)
+
+	print('start socket')
+	#change IP
+	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.90.234", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	message_index = 0
+	new_object_list = [] # list of all of the objects to render
+	inventory_list = []
+
+	i = 0
+	dt = 0.02
+	
+	rate = rospy.Rate(1 / dt)
+	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=10)
+	T = 1000
+	max_speed = 1 #m/s
+
+	fa = FrankaArm()
+	print('about to reset')
+	fa.reset_joints()
+	pose = fa.get_pose()
+
+	fa.goto_gripper(0, grasp=True)
+
+	# go to scanning position
 	pose.translation = np.array([0.6, 0, 0.5])
 	fa.goto_pose(pose)
 
@@ -287,9 +358,112 @@ if __name__ == "__main__":
 
 	object_queue = queue.Queue()
 
-	vision = threading.Thread(target=vision_loop, args=(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_intrinsics_static, realsense_to_static_transform, detected_objects, object_queue))
-	position_tracking = threading.Thread(target=position_loop, args=(object_queue,))
+	# begin scanning for blocks
+	vision = threading.Thread(target=vision_loop, args=(realsense_intrinsics,realsense_to_ee_transform, detected_objects, object_queue))
 	vision.start()
-	position_tracking.start()
-	# vision.join()
-	# position_tracking.join()
+	
+	
+	initialize = True
+	while True:
+		hand_pose = fa.get_pose()
+		hand_position = hand_pose.translation
+		hand_rot = hand_pose.quaternion
+		finger_width = fa.get_gripper_width() # check this 
+		message_index += 1
+
+		queue_size = object_queue.qsize()
+		while queue_size > 0:
+			print("Queue got backed up - removing....")
+			detected_objects = object_queue.get()
+			queue_size = object_queue.qsize()
+
+		# detected_objects = object_queue.get()
+
+		send_string = str(message_index) + '\n'
+		# print('detected_objects', detected_objects)
+		# print('keys:', detected_objects.keys(), 'type:', type(detected_objects.keys()[0]))
+		for item in inventory_list:
+			if not (int(item)) in detected_objects.keys():
+				send_string += "_deleteItem" + '\t' + item + '\n'
+		for item in detected_objects.keys():
+			if not(str(item) in inventory_list) and not(str(item) in new_object_list):
+				new_object_list.append(str(item))
+		if len(new_object_list) != 0:
+			send_string += new_object_message(new_object_list, detected_objects)
+		for game_object in detected_objects:
+			send_string += object_message(game_object, detected_objects) + '\n'
+		send_string += '_hand\t' + str(-hand_position[1]) + ',' + str(hand_position[2]) + ',' + str(hand_position[0]-0.6) +'\t'\
+			+ str(hand_rot[2]) + ',' + str(-hand_rot[3]) + ',' + str(-hand_rot[1]) + ',' + str(hand_rot[0]) + '\t' + str(finger_width)
+		# new_message = obj_string + '\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0,0'
+		sock.SendData(send_string) # Send this string to other application
+		# print(send_string)
+		# print("New Message: ", new_message)
+	
+		data = sock.ReadReceivedData() # read data
+
+		# print("Data: ", data)
+
+		if data != None: # if NEW data has been received since last ReadReceivedData function call
+			# print('send_string', send_string)
+			# print()
+			# print(data)
+			# print('\n')
+			inventory, unknown_objects, gripper_data = data.split('\n')
+			inventory_list = inventory.split('\t')[1:]
+			new_object_list = unknown_objects.split('\t')[1:]
+
+			goal_position, goal_rotation, goal_width = gripper_data.split('\t')
+			cur_pose = fa.get_pose()
+			cur_position = cur_pose.translation
+			goal_position = np.array(goal_position[1:-1].split(', ')).astype(np.float)
+			goal_position = np.array([goal_position[2] + 0.6, -goal_position[0], goal_position[1] + 0.02])
+			goal_rotation = np.array(goal_rotation[1:-1].split(', ')).astype(np.float)
+			goal_rotation = np.array([goal_rotation[3], -goal_rotation[2], goal_rotation[0], -goal_rotation[1]])
+			goal_width = 2*float(goal_width)
+
+			pose.translation = goal_position
+			print(goal_position[2])
+			goal_rotation_mat = pose.rotation_from_quaternion(goal_rotation)#@np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
+			pose.rotation = goal_rotation_mat
+			# fa.goto_pose(pose)
+			# clip magnitude of goal position to be within max speed bounds
+			if not initialize:
+				time_diff = timestamp - last_time
+				last_time = timestamp
+				# print("Time Diff:", time_diff)
+				if np.linalg.norm(goal_position - cur_position) > max_speed*time_diff:
+					print('Modifying goal_position from:', goal_position)
+					goal_position = max_speed*time_diff*(goal_position - cur_position)/np.linalg.norm(goal_position - cur_position) + cur_position
+					print('To:', goal_position)
+
+			pose.translation = goal_position
+			
+			if initialize:                   
+				# terminate active skills
+
+				fa.goto_pose(pose)
+				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10,
+					cartesian_impedances=[600.0, 600.0, 600.0, 10.0, 10.0, 10.0])
+				initialize = False
+
+				init_time = rospy.Time.now().to_time()
+				timestamp = rospy.Time.now().to_time() - init_time
+				last_time = timestamp
+			else:
+				timestamp = rospy.Time.now().to_time() - init_time
+				traj_gen_proto_msg = PosePositionSensorMessage(
+					id=i, timestamp=timestamp,
+					position=pose.translation, quaternion=pose.quaternion
+				)
+				ros_msg = make_sensor_group_msg(
+					trajectory_generator_sensor_msg=sensor_proto2ros_msg(
+						traj_gen_proto_msg, SensorDataMessageType.POSE_POSITION),
+					)
+
+				rospy.loginfo('Publishing: ID {}'.format(traj_gen_proto_msg.id))
+				pub.publish(ros_msg)
+				rate.sleep()
+
+			grip_wrapper.goto(goal_width, 0.15)
+			i+=1
+			rate.sleep()
