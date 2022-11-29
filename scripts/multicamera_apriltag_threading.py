@@ -73,6 +73,12 @@ def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_in
 			# continue
 
 		color_image1 = np.asanyarray(color_frame1.get_data())
+
+		# TODO: color thresholding to turn color into more light values in black and white
+			# pick the lightest value out of the RGB chanels???
+
+
+
 		bw_image1 = cv2.cvtColor(color_image1, cv2.COLOR_BGR2GRAY)
 
 		# python wrapper AprilTag package

@@ -9,7 +9,7 @@ from cv_bridge import CvBridge, CvBridgeError
 
 from frankapy import FrankaArm
 
-from autolab_core import RigidTransform, Point
+from autolab_core import RigidTransform, Point, transformations
 
 def get_azure_kinect_rgb_image(cv_bridge, topic='/rgb/image_raw'):
     """
@@ -229,4 +229,29 @@ def get_object_center_point_in_world_realsense_robust(
 
     # original method
     return object_center_point_in_world, variance
+
+def rotation_matrix_weighted_average(rotation_matrices, weights):
+    """
+    This function takes two rotation matricies and finds their weighted average. 
+
+    Parameters
+    ----------
+    rotation_matricies: rotation matricies to be averaged, as numpy arrays
+    weights: relative weights of each matrix.
+
+    returns: the weighted average rotation matrix (numpy array) 
+    """
+    M = np.zeros((4,4))
+    for rotation_matrix, weight in zip(rotation_matrices, weights):
+        # Given the rotation matrix, calcuate the quaternion in w,x,y,z form.
+        transform_matrix = np.eye(4)
+        transform_matrix[:3, :3] = rotation_matrix
+        q_xyzw = transformations.quaternion_from_matrix(transform_matrix)
+        q_wxyz = np.array([q_xyzw[3], q_xyzw[0], q_xyzw[1], q_xyzw[2]])
+
+        # Create M = sum(weight*q@q.T)
+        M += weight*np.outer(q_wxyz, q_wxyz)
+
+    eig_vals, eig_vecs = np.linalg.eig(M)
+    return eig_vecs[:, np.argmax(eig_vals)]
 

@@ -60,6 +60,10 @@ class DetectObjectNew:
 		self.size = "0.03,0.03,0.03" #[m]
 		self.color = "0,0,255,1"
 		self.type = "block"
+
+		# vector displacemetn of the center point from the center of the tag, in the tag's coordinate frame
+		# (ie. for the block, the vector is [0, 0, -0.015] since the center is 1.5cm into the block (normal 
+		# to the tag) and centered on the tag.) if None, find the center of the tag, not the object
 		self.center_offset_vector = np.array([[0],[0],[0.015]])
 
 	def _return_current_position(self):
@@ -176,12 +180,9 @@ class DetectObjectNew:
 		verts: pointcloud of the scene 
 		robot_pose: the pose of the robot end-effector
 		translation_matrix: translation of apriltag in camera frame
+		static: Whether the static camera was used (bool)
+		gripper: whether the gripper camera was used (bool)
 		rotation_matrix: rotation of apriltag in camera frame
-			if None, find the center of the tag, not the object
-		normal_offset_vector: vector displacemetn of the center point 
-			from the center of the tag, in the tag's coordinate frame
-			(ie. for the block, the vector is [0, 0, -0.015] since the center 
-			is 1.5cm into the block (normal to the tag) and centered on the tag.)
 			if None, find the center of the tag, not the object
 
 		Returns
@@ -214,9 +215,11 @@ class DetectObjectNew:
 			self.object_center_point[0]+=0.1
 			self.object_center_point[2]-=0.07
 
-			# BEGIN 10/26 ROTATION EDIT
+			print("\nOnly Static Object Prediction: ", self.object_center_point)
+
+			# Project the center into the block
 			if (rotation_matrix is not None and self.center_offset_vector is not None):
-				disp_vector = robot_pose.rotation@self.realsense_to_ee_transform.rotation@rotation_matrix@self.center_offset_vector
+				disp_vector = self.realsense_to_static_transform@rotation_matrix@self.center_offset_vector
 				self.object_center_point = self.object_center_point + disp_vector.flatten()
 
 		# only gripper camera detected this object
@@ -270,6 +273,20 @@ class DetectObjectNew:
 			# if the prediction difference between depth and no depth is large ignore depth-based z
 			elif abs(com_depth_ee[2] - com_nodepth_ee[2]) > 0.1:
 				com_depth_ee[2] = com_nodepth_ee[2]
+
+			# weighted average
+			com_static = np.array([(com_depth_static[0] + com_nodepth_static[0])/2, (com_depth_static[1] + com_nodepth_static[1])/2, (2*com_depth_static[2] + com_nodepth_static[2])/3])
+			com_ee = np.array([(com_depth_ee[0] + com_nodepth_ee[0])/2, (com_depth_ee[1] + com_nodepth_ee[1])/2, (2*com_depth_ee[2] + com_nodepth_ee[2])/3])
+			
+
+			# scale predictions based on experimentally observed offsets
+			com_static[0]+=0.1
+			com_static[2]-=0.07
+
+			print("\nDifference Prediction: ", np.subtract(com_static, com_ee))
+			print("Static Camera Depth: ", com_static)
+			print("EE Camera: ", com_ee)
+			# print("Difference No Depth Prediction: ", com_nodepth_static - com_nodepth_ee)
 
 			# weighted average
 			# self.object_center_point = np.array([(com_depth_static[0] + com_nodepth_static[0] + 3*com_depth_ee[0] + 3*com_nodepth_ee[0])/8, (com_depth_static[1] + com_nodepth_static[1] + 3*com_depth_ee[1] + 3*com_nodepth_ee[1])/8, (2*com_depth_static[2] + com_nodepth_static[2] + 12*com_depth_ee[2] + 6*com_nodepth_ee[2])/21])

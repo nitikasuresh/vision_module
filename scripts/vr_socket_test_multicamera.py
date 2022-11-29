@@ -127,7 +127,7 @@ def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_in
 
 		# camera parameters [fx, fy, cx, cy]
 		cam_param1 = [realsense_intrinsics_static.fx, realsense_intrinsics_static.fy, realsense_intrinsics_static.cx, realsense_intrinsics_static.cy]
-		detections1 = detector1.detect(bw_image1, estimate_tag_pose=True, camera_params=cam_param1, tag_size=0.03)
+		detections1 = detector1.detect(bw_image1, estimate_tag_pose=True, camera_params=cam_param1, tag_size=0.022)
 
 		# -------- Gripper Get Frames and Detect Apriltags ----------
 		frames2 = pipeline2.wait_for_frames()
@@ -160,7 +160,7 @@ def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_in
 
 		# camera parameters [fx, fy, cx, cy]
 		cam_param2 = [realsense_intrinsics_ee.fx, realsense_intrinsics_ee.fy, realsense_intrinsics_ee.cx, realsense_intrinsics_ee.cy]
-		detections2 = detector1.detect(bw_image2, estimate_tag_pose=True, camera_params=cam_param2, tag_size=0.03)
+		detections2 = detector1.detect(bw_image2, estimate_tag_pose=True, camera_params=cam_param2, tag_size=0.022)
 
 		# ------- Find Apriltags Both Cameras Detected -------
 		# want a list with detection, and two booleans of static and gripper
@@ -324,7 +324,7 @@ if __name__ == "__main__":
 
 	print('start socket')
 	#change IP
-	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.90.234", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.81.222", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
 	inventory_list = []
@@ -359,7 +359,7 @@ if __name__ == "__main__":
 	object_queue = queue.Queue()
 
 	# begin scanning for blocks
-	vision = threading.Thread(target=vision_loop, args=(realsense_intrinsics,realsense_to_ee_transform, detected_objects, object_queue))
+	vision = threading.Thread(target=vision_loop, args=(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_intrinsics_static, realsense_to_static_transform, detected_objects, object_queue))
 	vision.start()
 	
 	
@@ -442,7 +442,7 @@ if __name__ == "__main__":
 				# terminate active skills
 
 				fa.goto_pose(pose)
-				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10,
+				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10, block = False,
 					cartesian_impedances=[600.0, 600.0, 600.0, 10.0, 10.0, 10.0])
 				initialize = False
 

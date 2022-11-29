@@ -96,8 +96,8 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 		depth_image = np.asanyarray(depth_frame.get_data())
 
 		# skip empty frames
-		if not np.any(depth_image):
-			print("no depth")
+		# if not np.any(depth_image):
+		# 	print("no depth")
 			# continue
 
 		# print("\n[INFO] found a valid depth frame")
@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
 	print('start socket')
 	#change IP
-	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.90.234", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.2.162", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
 	inventory_list = []
@@ -218,7 +218,8 @@ if __name__ == "__main__":
 	rate = rospy.Rate(1 / dt)
 	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=10)
 	T = 1000
-	max_speed = 1 #m/s
+	max_speed = 4 #m/s
+	break_acc = 20 #m/s^2
 
 	fa = FrankaArm()
 	print('about to reset')
@@ -245,23 +246,28 @@ if __name__ == "__main__":
 	vision = threading.Thread(target=vision_loop, args=(realsense_intrinsics,realsense_to_ee_transform, detected_objects, object_queue))
 	vision.start()
 	
-	
+	fa.goto_pose(pose)
 	initialize = True
+	hand_pose = pose
+	goal_position = pose.translation
+
 	while True:
+		previous_pose = hand_pose
 		hand_pose = fa.get_pose()
 		hand_position = hand_pose.translation
 		hand_rot = hand_pose.quaternion
-		finger_width = fa.get_gripper_width() # check this 
+		finger_width = 0.04 #fa.get_gripper_width() # check this 
 		message_index += 1
-
+		
+		
 		queue_size = object_queue.qsize()
 		while queue_size > 0:
-			print("Queue got backed up - removing....")
+			# print("Queue got backed up - removing....")
 			detected_objects = object_queue.get()
 			queue_size = object_queue.qsize()
 
 		# detected_objects = object_queue.get()
-
+		
 		send_string = str(message_index) + '\n'
 		# print('detected_objects', detected_objects)
 		# print('keys:', detected_objects.keys(), 'type:', type(detected_objects.keys()[0]))
@@ -277,11 +283,8 @@ if __name__ == "__main__":
 			send_string += object_message(game_object, detected_objects) + '\n'
 		send_string += '_hand\t' + str(-hand_position[1]) + ',' + str(hand_position[2]) + ',' + str(hand_position[0]-0.6) +'\t'\
 			+ str(hand_rot[2]) + ',' + str(-hand_rot[3]) + ',' + str(-hand_rot[1]) + ',' + str(hand_rot[0]) + '\t' + str(finger_width)
-		# new_message = obj_string + '\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0\t0,0,0\t0,0,0,1\t0,0,0\n0,0,0,0'
+
 		sock.SendData(send_string) # Send this string to other application
-		# print(send_string)
-		# print("New Message: ", new_message)
-	
 		data = sock.ReadReceivedData() # read data
 
 		# print("Data: ", data)
@@ -294,9 +297,10 @@ if __name__ == "__main__":
 			inventory, unknown_objects, gripper_data = data.split('\n')
 			inventory_list = inventory.split('\t')[1:]
 			new_object_list = unknown_objects.split('\t')[1:]
+			previous_goal_position = goal_position
 
 			goal_position, goal_rotation, goal_width = gripper_data.split('\t')
-			cur_pose = fa.get_pose()
+			cur_pose = hand_pose
 			cur_position = cur_pose.translation
 			goal_position = np.array(goal_position[1:-1].split(', ')).astype(np.float)
 			goal_position = np.array([goal_position[2] + 0.6, -goal_position[0], goal_position[1] + 0.02])
@@ -304,27 +308,38 @@ if __name__ == "__main__":
 			goal_rotation = np.array([goal_rotation[3], -goal_rotation[2], goal_rotation[0], -goal_rotation[1]])
 			goal_width = 2*float(goal_width)
 
-			pose.translation = goal_position
-			print(goal_position[2])
 			goal_rotation_mat = pose.rotation_from_quaternion(goal_rotation)#@np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
 			pose.rotation = goal_rotation_mat
 			# fa.goto_pose(pose)
 			# clip magnitude of goal position to be within max speed bounds
-			if not initialize:
+			if initialize:
+				time_diff = dt
+			else:
 				time_diff = timestamp - last_time
+				print("Time Diff:", time_diff)
 				last_time = timestamp
-				# print("Time Diff:", time_diff)
-				if np.linalg.norm(goal_position - cur_position) > max_speed*time_diff:
-					print('Modifying goal_position from:', goal_position)
-					goal_position = max_speed*time_diff*(goal_position - cur_position)/np.linalg.norm(goal_position - cur_position) + cur_position
-					print('To:', goal_position)
+			speed = np.linalg.norm(goal_position - cur_position)/time_diff
+			goal_speed = np.linalg.norm(goal_position - previous_goal_position)/time_diff
+			goal_speed = np.clip(goal_speed, 0, max_speed)
+			goal_direction = (goal_position - previous_goal_position)/np.linalg.norm(goal_position - previous_goal_position)
+			hand_speed = np.linalg.norm(cur_position- previous_pose.translation)/time_diff
+			print('hand_speed', hand_speed)
+			direction = (goal_position - cur_position)/np.linalg.norm(goal_position - cur_position)
+			if speed > max_speed:
+				# print('Modifying goal_position from:', goal_position)
+				goal_position = max_speed*time_diff*direction + cur_position
+				speed = max_speed
+				# print('To:', goal_position)
 
-			pose.translation = goal_position
+			projected_pose = (hand_speed+speed)*time_diff*direction + goal_position
+			while np.any([projected_pose <= FC.WORKSPACE_WALLS[:, :3].min(axis=0), projected_pose >= FC.WORKSPACE_WALLS[:, :3].max(axis=0)]):
+				print((hand_speed+speed)*time_diff)
+				goal_position -= direction*0.001
+				projected_pose = (hand_speed+speed)*time_diff*direction + goal_position
+			pose.translation = goal_position #+ goal_direction*goal_speed*time_diff
 			
 			if initialize:                   
 				# terminate active skills
-
-				fa.goto_pose(pose)
 				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10,
 					cartesian_impedances=[600.0, 600.0, 600.0, 10.0, 10.0, 10.0])
 				initialize = False
@@ -332,7 +347,9 @@ if __name__ == "__main__":
 				init_time = rospy.Time.now().to_time()
 				timestamp = rospy.Time.now().to_time() - init_time
 				last_time = timestamp
+
 			else:
+				start_time = time.perf_counter()
 				timestamp = rospy.Time.now().to_time() - init_time
 				traj_gen_proto_msg = PosePositionSensorMessage(
 					id=i, timestamp=timestamp,
@@ -345,8 +362,20 @@ if __name__ == "__main__":
 
 				rospy.loginfo('Publishing: ID {}'.format(traj_gen_proto_msg.id))
 				pub.publish(ros_msg)
-				rate.sleep()
 
-			grip_wrapper.goto(goal_width, 0.15)
+				end_time = time.perf_counter()
+				# print('run time:', end_time - start_time)
+
+				#If the gripper is near a virtual wall, stop the gripper and re-initialize 
+				#the goto_pose skill. This will 'freeze' the gripper and keep inertia from 
+				#carying it into a wall.
+				# Check if the gripper is about to run into a virtual wall.  
+				# print(time_diff)
+				# projected_pose = (hand_speed*3*time_diff + 0.5*hand_speed**2/break_acc)*direction + cur_position
+				# if np.any([projected_pose <= FC.WORKSPACE_WALLS[:, :3].min(axis=0), projected_pose >= FC.WORKSPACE_WALLS[:, :3].max(axis=0)]):
+				# 	fa.stop_skill()
+				# 	initialize = True
+
+			# grip_wrapper.goto(goal_width, 0.15)
 			i+=1
 			rate.sleep()

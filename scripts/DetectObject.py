@@ -463,7 +463,181 @@ class DetectObject:
 		"""
 		pass 
 
-	def get_orientation_apriltag(self, tag_rotation_matrix, initial_rotation):
+	def get_pose_apriltag(self, bounds, verts, robot_pose, translation_matrix, rotation_matrix=None):
+		"""
+		Estimate the object pose in the robot's frame given the image, depth,
+		object bounds, current robot pose based on AprilTag detection, and 
+		object center offset vecotor, which point.
+
+		Parameters
+		----------
+		bounds: numpy array of the bounding box of the detected object
+		verts: pointcloud of the scene 
+		robot_pose: the pose of the robot end-effector
+		translation_matrix: translation of apriltag in camera frame
+		rotation_matrix: rotation of apriltag in camera frame
+			if None, find the center of the tag, not the object
+
+		Returns
+		-------
+		object_center_point: the x,y,z coordinate of the center of the object
+			in the robot's coordinate frame
+		"""
+
+
+		# # ---- Determine How Many Cameras ----
+		# # only the static camera detected this object
+		# if static and not gripper:
+		# 	bounds = bounds[0]
+		# 	verts = verts[0]
+		# 	com_depth, com_nodepth = self._get_positions_depth_nodepth(bounds, verts, self.realsense_intrinsics_static, self.realsense_to_static_transform, robot_pose)
+
+		# 	# ---- Combine Predictions ----
+		# 	# if depth-based prediction is Nan, only use non-depth-based prediction
+		# 	if np.isnan(com_depth.any()):
+		# 		com_depth = com_nodepth
+		# 	# if the prediction difference between depth and no depth is large ignore depth-based z
+		# 	elif abs(com_depth[2] - com_nodepth[2]) > 0.1:
+		# 		com_depth[2] = com_nodepth[2]
+
+		# 	# weighted average
+		# 	self.object_center_point = np.array([(com_depth[0] + com_nodepth[0])/2, (com_depth[1] + com_nodepth[1])/2, (2*com_depth[2] + com_nodepth[2])/3])
+			
+		# 	# BEGIN 10/26 ROTATION EDIT
+		# 	if (rotation_matrix is not None and self.center_offset_vector is not None):
+		# 		disp_vector = robot_pose.rotation@self.realsense_to_ee_transform.rotation@rotation_matrix@self.center_offset_vector
+		# 		self.object_center_point = self.object_center_point + disp_vector.flatten()
+
+		# # only gripper camera detected this object
+		# elif gripper and not static:
+		# 	bounds = bounds[0]
+		# 	verts = verts[0]
+		# 	com_depth, com_nodepth = self._get_positions_depth_nodepth(bounds, verts, self.realsense_intrinsics_ee, self.realsense_to_ee_transform, robot_pose)
+		# 	com_nodepth[2]+=0.03
+
+		# 	# scale the no-depth y estimate to account for some linear error we determined experimentally
+		# 	delta_y = -0.22*com_depth[2] + 0.11
+		# 	com_nodepth[1]-=delta_y
+
+		# 	# ---- Combine Predictions ----
+		# 	# if depth-based prediction is Nan, only use non-depth-based prediction
+		# 	if np.isnan(com_depth.any()):
+		# 		com_depth = com_nodepth
+		# 	# if the prediction difference between depth and no depth is large ignore depth-based z
+		# 	elif abs(com_depth[2] - com_nodepth[2]) > 0.1:
+		# 		com_depth[2] = com_nodepth[2]
+
+		# 	# weighted average
+		# 	self.object_center_point = np.array([(com_depth[0] + com_nodepth[0])/2, (com_depth[1] + com_nodepth[1])/2, (2*com_depth[2] + com_nodepth[2])/3])
+			
+		# 	# BEGIN 10/26 ROTATION EDIT
+		# 	if (rotation_matrix is not None and self.center_offset_vector is not None):
+		# 		disp_vector = robot_pose.rotation@self.realsense_to_ee_transform.rotation@rotation_matrix@self.center_offset_vector
+		# 		self.object_center_point = self.object_center_point + disp_vector.flatten()
+
+		# # both cameras detected this object
+		# else:
+		# 	com_depth_static, com_nodepth_static = self._get_positions_depth_nodepth(bounds[0], verts[0], self.realsense_intrinsics_static, self.realsense_to_static_transform, robot_pose)
+		# 	com_depth_ee, com_nodepth_ee = self._get_positions_depth_nodepth(bounds[1], verts[1], self.realsense_intrinsics_ee, self.realsense_to_ee_transform, robot_pose)
+		# 	com_nodepth_ee[2]+=0.03
+
+		# 	# scale the no-depth y estimate to account for some linear error we determined experimentally
+		# 	delta_y = -0.22*com_nodepth_ee[2] + 0.11
+		# 	com_nodepth_ee[1]-=delta_y
+
+		# 	# ---- Combine Predictions ----
+		# 	# if depth-based prediction is Nan, only use non-depth-based prediction
+		# 	if np.isnan(com_depth_static.any()):
+		# 		com_depth_static = com_nodepth_static
+		# 	# if the prediction difference between depth and no depth is large ignore depth-based z
+		# 	elif abs(com_depth_static[2] - com_nodepth_static[2]) > 0.1:
+		# 		com_depth_static[2] = com_nodepth_static[2]
+		# 	# if depth-based prediction is Nan, only use non-depth-based prediction
+		# 	if np.isnan(com_depth_ee.any()):
+		# 		com_depth_ee = com_nodepth_ee
+		# 	# if the prediction difference between depth and no depth is large ignore depth-based z
+		# 	elif abs(com_depth_ee[2] - com_nodepth_ee[2]) > 0.1:
+		# 		com_depth_ee[2] = com_nodepth_ee[2]
+
+		# 	# weighted average
+		# 	self.object_center_point = np.array([(com_depth_static[0] + com_nodepth_static[0] + com_depth_ee[0] + com_nodepth_ee[0])/4, (com_depth_static[1] + com_nodepth_static[1] + com_depth_ee[1] + com_nodepth_ee[1])/4, (2*com_depth_static[2] + com_nodepth_static[2] + 2*com_depth_ee[2] + com_nodepth_ee[2])/6])
+			
+		# 	# BEGIN 10/26 ROTATION EDIT
+		# 	if (rotation_matrix is not None and self.center_offset_vector is not None):
+		# 		disp_vector = robot_pose.rotation@self.realsense_to_ee_transform.rotation@rotation_matrix@self.center_offset_vector
+		# 		self.object_center_point = self.object_center_point + disp_vector.flatten()
+
+
+
+
+
+
+
+
+
+
+
+		# ORIGINAL CODE:
+
+		# ---- Depth-Based Prediction ----
+		minx = np.amin(bounds[:,0], axis=0)
+		maxx = np.amax(bounds[:,0], axis=0)
+		miny = np.amin(bounds[:,1], axis=0)
+		maxy = np.amax(bounds[:,1], axis=0)
+		
+		obj_points = verts[miny:maxy, minx:maxx].reshape(-1,3)
+
+		zs = obj_points[:,2]
+		z = np.median(zs)
+		xs = obj_points[:,0]
+		ys = obj_points[:,1]
+		ys = np.delete(ys, np.where((zs < z - 1) | (zs > z + 1))) # take only y for close z to prevent including background
+
+		x_pos = np.median(xs)
+		y_pos = np.median(ys)
+		z_pos = z
+
+		print("\nDetect Object Extrinsics: ", self.realsense_to_ee_transform)
+
+		median_point = np.array([x_pos, y_pos, z_pos])
+
+		object_median_point = get_object_center_point_in_world_realsense_3D_camera_point(median_point, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
+		com_depth = np.array([object_median_point[0], object_median_point[1], object_median_point[2]])
+
+		print("\nCOM Depth: ", com_depth)
+
+		# ---- Image-Based Prediction (No Depth) ----
+		com_nodepth = get_object_center_point_in_world_realsense_3D_camera_point(translation_matrix, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
+		com_nodepth = np.array([com_nodepth[0], com_nodepth[1], com_nodepth[2]])
+		# com_nodepth[2]+=0.03
+
+		# # scale the no-depth y estimate to account for some linear error we determined experimentally
+		# delta_y = -0.22*com_depth[2] + 0.11
+		# com_nodepth[1]-=delta_y
+
+		print("No Depth: ", com_nodepth)
+
+		# ---- Combine Predictions ----
+		# if depth-based prediction is Nan, only use non-depth-based prediction
+		if np.isnan(com_depth.any()):
+			com_depth = com_nodepth
+		# if the prediction difference between depth and no depth is large ignore depth-based z
+		elif abs(com_depth[2] - com_nodepth[2]) > 0.1:
+			com_depth[2] = com_nodepth[2]
+
+		# weighted average
+		self.object_center_point = np.array([(com_depth[0] + com_nodepth[0])/2, (com_depth[1] + com_nodepth[1])/2, (2*com_depth[2] + com_nodepth[2])/3])
+		
+		# BEGIN 10/26 ROTATION EDIT
+		if (rotation_matrix is not None and self.center_offset_vector is not None):
+			disp_vector = robot_pose.rotation@self.realsense_to_ee_transform.rotation@rotation_matrix@self.center_offset_vector
+			self.object_center_point = self.object_center_point + disp_vector.flatten()
+
+		# convert from camera frame to world frame
+		# END 10/26 ROTATION EDIT
+
+		return self.object_center_point
+	def get_pose_apriltag(self, tag_rotation_matrix, initial_rotation):
 		"""
 		Estimate the object pose in the robot's frame given the image, depth,
 		object bounds and current robot pose based on AprilTag detection.
