@@ -211,9 +211,9 @@ class DetectObjectNew:
 			# weighted average
 			self.object_center_point = np.array([(com_depth[0] + com_nodepth[0])/2, (com_depth[1] + com_nodepth[1])/2, (2*com_depth[2] + com_nodepth[2])/3])
 			
-			# scale predictions based on experimentally observed offsets
-			self.object_center_point[0]+=0.1
-			self.object_center_point[2]-=0.07
+			# # scale predictions based on experimentally observed offsets
+			# self.object_center_point[0]+=0.1
+			# self.object_center_point[2]-=0.07
 
 			print("\nOnly Static Object Prediction: ", self.object_center_point)
 
@@ -274,18 +274,22 @@ class DetectObjectNew:
 			elif abs(com_depth_ee[2] - com_nodepth_ee[2]) > 0.1:
 				com_depth_ee[2] = com_nodepth_ee[2]
 
+			
 			# weighted average
 			com_static = np.array([(com_depth_static[0] + com_nodepth_static[0])/2, (com_depth_static[1] + com_nodepth_static[1])/2, (2*com_depth_static[2] + com_nodepth_static[2])/3])
 			com_ee = np.array([(com_depth_ee[0] + com_nodepth_ee[0])/2, (com_depth_ee[1] + com_nodepth_ee[1])/2, (2*com_depth_ee[2] + com_nodepth_ee[2])/3])
 			
 
-			# scale predictions based on experimentally observed offsets
-			com_static[0]+=0.1
-			com_static[2]-=0.07
+			# # scale predictions based on experimentally observed offsets
+			# com_static[0]+=0.1
+			# com_static[2]-=0.07
 
-			print("\nDifference Prediction: ", np.subtract(com_static, com_ee))
-			print("Static Camera Depth: ", com_static)
-			print("EE Camera: ", com_ee)
+			print("\nCOM EE: ", com_ee)
+			print("COM Static: ", com_static)
+
+			# print("\nDifference Prediction: ", np.subtract(com_static, com_ee))
+			# print("Static Camera Depth: ", com_static)
+			# print("EE Camera: ", com_ee)
 			# print("Difference No Depth Prediction: ", com_nodepth_static - com_nodepth_ee)
 
 			# weighted average

@@ -18,11 +18,14 @@ from utils import *
 
 from autolab_core import RigidTransform, YamlConfig
 
+# NOTE: change the static camera's intrinsic and transform files as well as the serial number to test each camera
+# calibration quality seperately (compare to wrist end-effector as ground truth)
+
 REALSENSE_INTRINSICS_EE = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
-REALSENSE_INTRINSICS_STATIC = "calib/realsense_static_intrinsics.intr"
-REALSENSE_STATIC_TF = "calib/realsense_static.tf"
+REALSENSE_INTRINSICS_STATIC = "calib/realsense_intrinsics_camera5.intr"
+REALSENSE_STATIC_TF = "calib/realsense_camera5.tf"
 
 def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_intrinsics_static, realsense_to_static_transform, detected_objects, object_queue):
 	# ----- Non-ROS vision attempt
@@ -32,7 +35,7 @@ def vision_loop(realsense_intrinsics_ee, realsense_to_ee_transform, realsense_in
 	# ------- Configure Static Camera Stream ------------
 	pipeline1 = rs.pipeline()
 	config1 = rs.config()
-	config1.enable_device('151322061880')
+	config1.enable_device('151322066932')
 	config1.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
 	config1.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
 
@@ -274,14 +277,14 @@ if __name__ == "__main__":
 	
 	# reset pose and joints
 	fa = FrankaArm()
-	fa.reset_pose()
-	fa.reset_joints()
+	# fa.reset_pose()
+	# fa.reset_joints()
 
-	# move to center
-	pose = fa.get_pose()
-	# print("\nRobot Pose: ", pose)
-	pose.translation = np.array([0.6, 0, 0.5])
-	fa.goto_pose(pose)
+	# # move to center
+	# pose = fa.get_pose()
+	# # print("\nRobot Pose: ", pose)
+	# pose.translation = np.array([0.6, 0, 0.5])
+	# fa.goto_pose(pose)
 
 	realsense_intrinsics_ee = CameraIntrinsics.load(args.ee_intrinsics_file_path)
 	realsense_to_ee_transform = RigidTransform.load(args.ee_extrinsics_file_path)

@@ -11,7 +11,7 @@ robot) and the camera intrinsics.
 """
 
 # ------ Calirbation Information -------
-# Camera 2: '151322066099', checkerboard = (5,13)
+# Camera 2: '151322066099', checkerboard = (5,12)
 # Camera 3: '151322069488', checkerboard = (5,16)
 # Camera 4: '151322061880', checkerboard = (5,26)
 # Camera 5: '151322066932', checkerboard = (5,9)
@@ -21,7 +21,7 @@ save_name = "realsense_static_1"
 
 # define the size of checkerboard being used to calibrate 
 # NOTE: need to check to make sure board of desired dimension is in frame
-checkerboard = (5,26) # (5,26) # (5,8) # extended is (5,17)
+checkerboard = (5,9) # (5,26) # (5,8) # extended is (5,17)
 
 # lists of points
 objpoints = [] # 3d real-world point in robot frame
@@ -58,7 +58,7 @@ W = 848
 H = 480
 pipeline = rs.pipeline()
 config = rs.config()
-config.enable_device('151322061880') # decide which camera to calibrate
+config.enable_device('151322066932') # decide which camera to calibrate
 config.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
 config.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
 
@@ -77,14 +77,14 @@ for i in range(500): # NOTE: 500 iterations is best!
 
 	# find checkerboard corners
 	ret, corners = cv2.findChessboardCorners(bw_image, checkerboard, cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE)
-
+	# print("\nCorners: ", corners)
 	if ret == True:
 
 		corners_refined = cv2.cornerSubPix(bw_image, corners, (11, 11), (-1, -1), criteria)
 
 		# # visualize the corners in the order they appear (for debugging purposes)
 		# for corner in corners:
-		# 	print("Corner: ", corner)
+		# 	# print("Corner: ", corner)
 		# 	cX = int(corner[0][0])
 		# 	cY = int(corner[0][1])
 		# 	cv2.circle(color_image, (cX, cY), 5, (0, 0, 255), -1)
@@ -93,6 +93,8 @@ for i in range(500): # NOTE: 500 iterations is best!
 
 		imgpoints.append(np.array(corners_refined.reshape(corners_refined.shape[0],2), np.float32))
 		objpoints.append(pose3d)
+
+	print("Iteration: ", i)
 
 # NOTE: maybe add a second loop that waits for a keypress to allow one to move the checkerboard (i.e. lift it to vary z)
 
