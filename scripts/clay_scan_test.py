@@ -31,15 +31,15 @@ if __name__ == "__main__":
 	
 	# reset pose and joints
 	fa = FrankaArm()
-	fa.reset_pose()
-	fa.reset_joints()
+	# fa.reset_pose()
+	# fa.reset_joints()
 
 	# loop for 10 random actions
-	for i in range(5):
+	for i in range(500):
 		# move to middle scanning position
-		pose = fa.get_pose()
-		pose.translation = np.array([0.6, 0, 0.5])
-		fa.goto_pose(pose)
+		# pose = fa.get_pose()
+		# pose.translation = np.array([0.6, 0, 0.5])
+		# fa.goto_pose(pose)
 
 		# begin scanning blocks based on colors
 		cv_bridge = CvBridge()
@@ -112,28 +112,28 @@ if __name__ == "__main__":
 		cv2.imshow("Res Color", res_color)
 		cv2.waitKey(500)
 
-		# Save the raw color image to images folder
-		filename = "scripts/Images/shape_test_" + str(i) + ".jpg"
-		cv2.imwrite(filename, img)
+		# # Save the raw color image to images folder
+		# filename = "scripts/Images/shape_test_" + str(i) + ".jpg"
+		# cv2.imwrite(filename, img)
 
-		# NOTE: have a popup that has the user approve the location/grasp width (replace this with the GUI control)
+		# # NOTE: have a popup that has the user approve the location/grasp width (replace this with the GUI control)
 		
-		# Move down and close gripper
-		random_x = random.randint(-2, 2)/100.0
-		width = random.randint(3, 6)/100.0
-		z_clipped = np.clip(object_center_point_in_world[2]/1.5, a_min=0.014, a_max=None)
-		ee_location = np.array([object_center_point_in_world[0]+random_x, object_center_point_in_world[1], z_clipped])
+		# # Move down and close gripper
+		# random_x = random.randint(-2, 2)/100.0
+		# width = random.randint(3, 6)/100.0
+		# z_clipped = np.clip(object_center_point_in_world[2]/1.5, a_min=0.014, a_max=None)
+		# ee_location = np.array([object_center_point_in_world[0]+random_x, object_center_point_in_world[1], z_clipped])
 		
-		# print("\nLocation = ", ee_location)
-		# print("Gripper Width = ", width)
-		# input("Press ENTER to approve the above location...")
+		# # print("\nLocation = ", ee_location)
+		# # print("Gripper Width = ", width)
+		# # input("Press ENTER to approve the above location...")
 
-		pose = fa.get_pose()
-		pose.translation = ee_location
-		fa.goto_pose(pose)
-		fa.goto_gripper(width)
-		fa.open_gripper()
+		# pose = fa.get_pose()
+		# pose.translation = ee_location
+		# fa.goto_pose(pose)
+		# fa.goto_gripper(width)
+		# fa.open_gripper()
 
-	pose = fa.get_pose()
-	pose.translation = np.array([0.6, 0, 0.5])
-	fa.goto_pose(pose)
+	# pose = fa.get_pose()
+	# pose.translation = np.array([0.6, 0, 0.5])
+	# fa.goto_pose(pose)
