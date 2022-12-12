@@ -135,6 +135,15 @@ def get_object_center_point_in_world_realsense_3D_camera_point(
     # object_center_point_in_world = transform * object_camera_point # NOTE: for second stationary camera
     return object_center_point_in_world
 
+def get_object_center_point_in_world_realsense_static_camera(
+    object_camera_point,
+    intrinsics,
+    transform):
+    
+    object_camera_point = Point(object_camera_point, "realsense_ee")
+    object_center_point_in_world = transform * object_camera_point # NOTE: for second stationary camera
+    return object_center_point_in_world
+
 def get_object_center_point_in_world_realsense_3D_camera_point_multicam(
     object_camera_point,
     intrinsics,
