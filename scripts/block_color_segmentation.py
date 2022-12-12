@@ -60,6 +60,8 @@ depth_filename = "scripts/Images/depth_background.jpg"
 cv2.imwrite(color_filename, color_image)
 cv2.imwrite(depth_filename, depth_image)
 
+assert False
+
 
 # # import baseline background images
 # background_color = cv2.imread("scripts/Images/color_background.jpg")

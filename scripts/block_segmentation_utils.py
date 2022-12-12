@@ -180,7 +180,7 @@ def iterate_contours(contours, block_dict, color, color_image, verts, intrinsics
 			if draw:
 				center_text = "({:0.4f}, {:0.4f}, {:0.4f}) [m]".format(com[0], com[1], com[2])
 				# center_text = "(" + str(com[0]) + ", " + str(com[1]) + ", " + str(com[2]) + ")"
-				cv2.putText(color_image, center_text, (cX + 30, cY + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+				# cv2.putText(color_image, center_text, (cX + 30, cY + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
 			block_dict[i] = [cnt, color, (cX, cY), com]
 			i+=1
