@@ -11,6 +11,8 @@ from frankapy import FrankaArm
 
 from autolab_core import RigidTransform, Point, transformations
 
+ALLOW_PRINT = False
+
 def get_azure_kinect_rgb_image(cv_bridge, topic='/rgb/image_raw'):
     """
     Grabs an RGB image for the topic as argument
@@ -71,11 +73,13 @@ def get_object_center_point_in_world(object_image_center_x, object_image_center_
     
     object_center = Point(np.array([object_image_center_x, object_image_center_y]), 'azure_kinect_overhead')
     object_depth = depth_image[object_image_center_y, object_image_center_x] * 0.001
-    print("x, y, z: ({:.4f}, {:.4f}, {:.4f})".format(
+    if ALLOW_PRINT:
+        print("x, y, z: ({:.4f}, {:.4f}, {:.4f})".format(
         object_image_center_x, object_image_center_y, object_depth))
     
     object_center_point_in_world = transform * intrinsics.deproject_pixel(object_depth, object_center)    
-    print(object_center_point_in_world)
+    if ALLOW_PRINT:
+        print(object_center_point_in_world)
 
     return object_center_point_in_world 
 
@@ -128,7 +132,8 @@ def get_object_center_point_in_world_realsense_3D_camera_point(
     transform,
     current_pose):
 
-    print("\nUtils Transform: ", transform)
+    if ALLOW_PRINT:
+        print("\nUtils Transform: ", transform)
 
     object_camera_point = Point(object_camera_point, "realsense_ee")
     object_center_point_in_world = current_pose * transform * object_camera_point
@@ -207,7 +212,8 @@ def get_object_center_point_in_world_realsense_robust(
     # print("\nAll Object Points: ", object_points)
 
     # original method
-    print("\nOriginal Based on Center Point: ", np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]]))
+    if ALLOW_PRINT:
+        print("\nOriginal Based on Center Point: ", np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]]))
     
     # naiively averaging the x,y,z to get the final point
     center_point = np.mean(object_points, axis=1)

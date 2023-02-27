@@ -12,7 +12,9 @@ from perception import CameraIntrinsics
 from utils import *
 
 REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
-REALSENSE_EE_TF = "calib/realsense_ee.tf"
+REALSENSE_EE_TF = "calib/realsense_ee_shifted.tf"
+
+ALLOW_PRINT = False
 
 # REALSENSE_INTRINSICS = "calib/realsense_static_intrinsics.intr"
 # REALSENSE_EE_TF = "calib/realsense_static.tf"
@@ -165,7 +167,7 @@ class DetectObject:
 		object_median_point = get_object_center_point_in_world_realsense_3D_camera_point(median_point, intrinsics, transform, robot_pose)
 		com_depth = np.array([object_median_point[0], object_median_point[1], object_median_point[2]])
 
-		# ---- Image-Based Prediction (No Depth) ----
+		# ---- Image-Based Prediction (No Depth) -state---
 		com_nodepth = get_object_center_point_in_world_realsense_3D_camera_point(translation_matrix, intrinsics, transform, robot_pose)
 		com_nodepth = np.array([com_nodepth[0], com_nodepth[1], com_nodepth[2]])
 
@@ -310,14 +312,16 @@ class DetectObject:
 		y_pos = np.median(ys)
 		z_pos = z
 
-		print("\nDetect Object Extrinsics: ", self.realsense_to_ee_transform)
+		if ALLOW_PRINT:
+			print("\nDetect Object Extrinsics: ", self.realsense_to_ee_transform)
 
 		median_point = np.array([x_pos, y_pos, z_pos])
 
 		object_median_point = get_object_center_point_in_world_realsense_3D_camera_point(median_point, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
 		com_depth = np.array([object_median_point[0], object_median_point[1], object_median_point[2]])
 
-		print("\nCOM Depth: ", com_depth)
+		if ALLOW_PRINT:
+			print("\nCOM Depth: ", com_depth)
 
 		# ---- Image-Based Prediction (No Depth) ----
 		com_nodepth = get_object_center_point_in_world_realsense_3D_camera_point(translation_matrix, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
@@ -328,15 +332,24 @@ class DetectObject:
 		# delta_y = -0.22*com_depth[2] + 0.11
 		# com_nodepth[1]-=delta_y
 
-		print("No Depth: ", com_nodepth)
+		if ALLOW_PRINT:
+			print("No Depth: ", com_nodepth)
 
 		# ---- Combine Predictions ----
 		# if depth-based prediction is Nan, only use non-depth-based prediction
 		if np.isnan(com_depth.any()):
 			com_depth = com_nodepth
+			if ALLOW_PRINT:
+				print('not using depth1')
 		# if the prediction difference between depth and no depth is large ignore depth-based z
-		elif abs(com_depth[2] - com_nodepth[2]) > 0.1:
-			com_depth[2] = com_nodepth[2]
+		elif abs(com_depth[2] - com_nodepth[2]) > 0.05:
+			com_depth = com_nodepth
+			if ALLOW_PRINT:
+				print('not using depth2')
+		else:
+			if ALLOW_PRINT:
+				print('using depth')
+				print(com_nodepth[2])
 
 		# weighted average
 		self.object_center_point = np.array([(com_depth[0] + com_nodepth[0])/2, (com_depth[1] + com_nodepth[1])/2, (2*com_depth[2] + com_nodepth[2])/3])
@@ -421,7 +434,8 @@ class DetectObject:
 
 				# if variance is too high, then ignore z position update
 				if variance > 1e-4:
-					print("high variance....ignore z update")
+					if ALLOW_PRINT:
+						print("high variance....ignore z update")
 					self.object_center_point = np.array([object_center_point_in_world[0], object_center_point_in_world[1], self.object_center_point[2]])
 				else:
 					self.object_center_point = np.array([object_center_point_in_world[0], object_center_point_in_world[1], object_center_point_in_world[2]])
@@ -597,14 +611,16 @@ class DetectObject:
 		y_pos = np.median(ys)
 		z_pos = z
 
-		print("\nDetect Object Extrinsics: ", self.realsense_to_ee_transform)
+		if ALLOW_PRINT:
+			print("\nDetect Object Extrinsics: ", self.realsense_to_ee_transform)
 
 		median_point = np.array([x_pos, y_pos, z_pos])
 
 		object_median_point = get_object_center_point_in_world_realsense_3D_camera_point(median_point, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
 		com_depth = np.array([object_median_point[0], object_median_point[1], object_median_point[2]])
 
-		print("\nCOM Depth: ", com_depth)
+		if ALLOW_PRINT:
+			print("\nCOM Depth: ", com_depth)
 
 		# ---- Image-Based Prediction (No Depth) ----
 		com_nodepth = get_object_center_point_in_world_realsense_3D_camera_point(translation_matrix, self.realsense_intrinsics, self.realsense_to_ee_transform, robot_pose)
@@ -615,7 +631,8 @@ class DetectObject:
 		# delta_y = -0.22*com_depth[2] + 0.11
 		# com_nodepth[1]-=delta_y
 
-		print("No Depth: ", com_nodepth)
+		if ALLOW_PRINT:
+			print("No Depth: ", com_nodepth)
 
 		# ---- Combine Predictions ----
 		# if depth-based prediction is Nan, only use non-depth-based prediction

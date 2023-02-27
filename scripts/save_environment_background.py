@@ -2,7 +2,6 @@ import cv2
 import argparse
 import numpy as np
 import pyrealsense2 as rs
-import skimage.exposure
 from block_segmentation_utils import *
 
 W = 848
@@ -37,3 +36,4 @@ color_frame = frames.get_color_frame()
 color_image = np.asanyarray(color_frame.get_data())
 
 color_filename = "scripts/Images/color_background.jpg"
+cv2.imwrite(color_filename, color_image)

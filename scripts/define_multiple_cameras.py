@@ -115,4 +115,5 @@ while True:
 	cv2.imshow("Camera 3", color_image_3)
 	cv2.imshow("Camera 4", color_image_4)
 	cv2.imshow("Camera 5", color_image_5)
+	
 	cv2.waitKey(1)

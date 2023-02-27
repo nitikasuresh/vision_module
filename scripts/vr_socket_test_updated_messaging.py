@@ -33,6 +33,9 @@ from utils import *
 REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
 REALSENSE_EE_TF = "calib/realsense_ee.tf"
 
+ALLOW_PRINT = True
+
+
 ### SESSION NOTES ###
 # comment out print in utils.get_object_center_point_in_world_realsense_3D_camera_point (131)
 # comment out print in DetectObject.py (185, 196, 178)
@@ -40,27 +43,41 @@ REALSENSE_EE_TF = "calib/realsense_ee.tf"
 class GripperWrapper:
 	def __init__(self, fa, close_tolerance = 0.001):
 		self.fa = fa
-		self.closed = False
+		self.closing = True
 		self.last_width = 0.08
 		self.close_tolerance = close_tolerance
+		self.cur_width = 0
+
 
 	def goto(self, width, speed):
-		cur_width = fa.get_gripper_width()
-		if cur_width - self.last_width > self.close_tolerance and self.closed:
+		width = max((width, 0.005))
+		self.cur_width = fa.get_gripper_width() # get current width
+		if self.cur_width - self.last_width > self.close_tolerance and self.closing: # check if the gripper is currently squezign the block.
 			squeezing = True
+		
 		else:
 			squeezing = False
-		diff = width - fa.get_gripper_width()
-		if abs(diff) > 0.001:
-			if diff > 0 and squeezing:
+		if self.cur_width - self.last_width < self.close_tolerance and not self.closing:
+			return # we told it to open the the current value, so there is no need to re-send the message.
+		diff = width - self.cur_width
+		if abs(diff) < 0.0025: #check if the gripper is already at the goal location:
+			return
+		if diff > 0 and squeezing: 
+			# the gripper is going in the wrong direction
+			pass
+			if ALLOW_PRINT:
 				print('stop_grip')
-				fa.stop_gripper()
-			if diff < 0:
-				self.closed = True
-			else:
-				self.closed = False
-			fa.goto_gripper(width, block=False, grasp=False, speed=speed)
-			self.last_width = width
+			fa.stop_gripper()
+		if diff < 0:
+			self.closing = True
+		else:
+			self.closing = False
+		fa.goto_gripper(width, block=False, grasp=self.closing, speed=speed, force = 10)
+		self.last_width = width
+
+
+	def get_width(self):
+		return self.cur_width
 
 def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_objects, object_queue):
 	# ----- Non-ROS vision attempt
@@ -112,10 +129,11 @@ def vision_loop(realsense_intrinsics, realsense_to_ee_transform, detected_object
 			refine_edges=1,
 			decode_sharpening=0.25,
 			debug=0)
+			#realsense_to_ee_transform = RigidTransform.load(args.extrinsics_file_path)
 
 		# camera parameters [fx, fy, cx, cy]
 		cam_param = [realsense_intrinsics.fx, realsense_intrinsics.fy, realsense_intrinsics.cx, realsense_intrinsics.cy]
-		detections = detector.detect(bw_image, estimate_tag_pose=True, camera_params=cam_param, tag_size=0.03)
+		detections = detector.detect(bw_image, estimate_tag_pose=True, camera_params=cam_param, tag_size=0.022) ##0028
 		# print("\nNumber of AprilTags: ", len(detections))
 
 		# loop over the detected AprilTags
@@ -199,15 +217,19 @@ if __name__ == "__main__":
 
 	fa = FrankaArm()
 	fa.reset_joints()
+	fa.close_gripper()
 	grip_wrapper = GripperWrapper(fa)
+	COUSTOM_GRIPPER_OFFSET = np.array([-0.06, 0, -0.03])
 
 	pose = fa.get_pose()
 	goal_rotation = pose.quaternion
-	print("Robot Resting Pose: ", pose)
-
-	print('start socket')
+	if ALLOW_PRINT:
+		print("Robot Resting Pose: ", pose)
+		print('start socket')
 	#change IP
-	sock = U.UdpComms(udpIP="172.26.40.95", sendIP = "172.26.2.162", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	# UdpIP: This computers IP. SendIP: Oculus IP
+	sock = U.UdpComms(udpIP="172.26.58.16", sendIP = "172.26.76.116", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	# sock = U.UdpComms(udpIP="172.26.58.16", sendIP = "172.26.9.43", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
 	inventory_list = []
@@ -218,11 +240,12 @@ if __name__ == "__main__":
 	rate = rospy.Rate(1 / dt)
 	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=10)
 	T = 1000
-	max_speed = 4 #m/s
+	max_speed = 1 # 4 #m/s
 	break_acc = 20 #m/s^2
 
 	fa = FrankaArm()
-	print('about to reset')
+	if ALLOW_PRINT:
+		print('about to reset')
 	fa.reset_joints()
 	pose = fa.get_pose()
 
@@ -250,7 +273,7 @@ if __name__ == "__main__":
 	initialize = True
 	hand_pose = pose
 	goal_position = pose.translation
-
+	old_message = ""
 	while True:
 		previous_pose = hand_pose
 		hand_pose = fa.get_pose()
@@ -281,19 +304,22 @@ if __name__ == "__main__":
 			send_string += new_object_message(new_object_list, detected_objects)
 		for game_object in detected_objects:
 			send_string += object_message(game_object, detected_objects) + '\n'
-		send_string += '_hand\t' + str(-hand_position[1]) + ',' + str(hand_position[2]) + ',' + str(hand_position[0]-0.6) +'\t'\
+		send_hand_position = hand_position + COUSTOM_GRIPPER_OFFSET
+		finger_width = fa.get_gripper_width()
+		send_string += '_hand\t' + str(-send_hand_position[1]) + ',' + str(send_hand_position[2]) + ',' + str(send_hand_position[0]-0.6) +'\t'\
 			+ str(hand_rot[2]) + ',' + str(-hand_rot[3]) + ',' + str(-hand_rot[1]) + ',' + str(hand_rot[0]) + '\t' + str(finger_width)
 
 		sock.SendData(send_string) # Send this string to other application
 		data = sock.ReadReceivedData() # read data
 
 		# print("Data: ", data)
-
 		if data != None: # if NEW data has been received since last ReadReceivedData function call
-			# print('send_string', send_string)
-			# print()
-			# print(data)
-			# print('\n')
+			if ALLOW_PRINT and old_message != data:
+				# print('send_string', send_string)
+				# print()
+				print(data)
+				print('\n')
+				old_message = data
 			inventory, unknown_objects, gripper_data = data.split('\n')
 			inventory_list = inventory.split('\t')[1:]
 			new_object_list = unknown_objects.split('\t')[1:]
@@ -304,6 +330,7 @@ if __name__ == "__main__":
 			cur_position = cur_pose.translation
 			goal_position = np.array(goal_position[1:-1].split(', ')).astype(np.float)
 			goal_position = np.array([goal_position[2] + 0.6, -goal_position[0], goal_position[1] + 0.02])
+			goal_position -= COUSTOM_GRIPPER_OFFSET
 			goal_rotation = np.array(goal_rotation[1:-1].split(', ')).astype(np.float)
 			goal_rotation = np.array([goal_rotation[3], -goal_rotation[2], goal_rotation[0], -goal_rotation[1]])
 			goal_width = 2*float(goal_width)
@@ -316,14 +343,16 @@ if __name__ == "__main__":
 				time_diff = dt
 			else:
 				time_diff = timestamp - last_time
-				print("Time Diff:", time_diff)
+				# if ALLOW_PRINT:
+				# 	print("Time Diff:", time_diff)
 				last_time = timestamp
 			speed = np.linalg.norm(goal_position - cur_position)/time_diff
 			goal_speed = np.linalg.norm(goal_position - previous_goal_position)/time_diff
 			goal_speed = np.clip(goal_speed, 0, max_speed)
 			goal_direction = (goal_position - previous_goal_position)/np.linalg.norm(goal_position - previous_goal_position)
 			hand_speed = np.linalg.norm(cur_position- previous_pose.translation)/time_diff
-			print('hand_speed', hand_speed)
+			# if ALLOW_PRINT:
+			# 	print('hand_speed', hand_speed)
 			direction = (goal_position - cur_position)/np.linalg.norm(goal_position - cur_position)
 			if speed > max_speed:
 				# print('Modifying goal_position from:', goal_position)
@@ -338,6 +367,19 @@ if __name__ == "__main__":
 				projected_pose = (hand_speed+speed)*time_diff*direction + goal_position
 			pose.translation = goal_position #+ goal_direction*goal_speed*time_diff
 			
+			grip_wrapper.goto(goal_width, 0.15)
+			# while abs(grip_wrapper.last_width-grip_wrapper.get_width()) > 0.003:
+			# 	grip_wrapper.goto(goal_width, 0.15)
+			# 	print('run grip')
+			cur_width = fa.get_gripper_width()
+			if abs(goal_width-cur_width) > 0.0025:
+				print('goal width', goal_width)
+				if goal_width > 0.05 or goal_width > fa.get_gripper_width():
+					fa.goto_gripper(goal_width, block=True, grasp=False)
+					print('grasp == False')
+				else:
+					fa.goto_gripper(goal_width, block=True, grasp=True, speed=0.15, force = 10)
+					print('grasp == True')
 			if initialize:                   
 				# terminate active skills
 				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10,
