@@ -66,7 +66,7 @@ class DetectObject:
 		self.object_ang_velocity = np.array([0,0,0])
 
 		# size, color, type, block offset (NOTE: these should be inputs to the init file)
-		self.size = "0.03,0.03,0.03" #[m]
+		self.size = "0.04,0.04,0.04" #[m]
 		self.color = "0,0,255,1"
 		self.type = "block"
 		self.center_offset_vector = np.array([[0],[0],[0.015]])

@@ -162,7 +162,7 @@ def euler_from_quaternion(quaternion):
      
         return np.array([roll_x, pitch_y, yaw_z])
 
-STACK = True
+STACK = False
 
 if __name__ == "__main__":
 	## Parameters:
@@ -267,19 +267,32 @@ if __name__ == "__main__":
 	gripper_integral = 0
 
 	for _ in range(2):
-		start_position = np.random.uniform(-0.15, 0.15, 2)
-		start_position_3 = np.zeros(3)
-		start_position_3[0:2] = start_position
-		while np.linalg.norm(start_position_3 - target1) < 0.1 or np.linalg.norm(start_position_3 - target2) < 0.1:
+		if STACK:
 			start_position = np.random.uniform(-0.15, 0.15, 2)
 			start_position_3 = np.zeros(3)
 			start_position_3[0:2] = start_position
-			start_position_3[2] = 0.02
+			while np.linalg.norm(start_position_3 - target1) < 0.1 or np.linalg.norm(start_position_3 - target2) < 0.1:
+				start_position = np.random.uniform(-0.15, 0.15, 2)
+				start_position_3 = np.zeros(3)
+				start_position_3[0:2] = start_position
+				start_position_3[2] = 0.02
+		else:
+			start_position = np.random.uniform(-0.15, 0.15, 2)
+			start_position_3 = np.zeros(3)
+			start_position_3[0:2] = start_position
+			while np.linalg.norm(start_position_3 - target) < 0.1:
+				start_position = np.random.uniform(-0.15, 0.15, 2)
+				start_position_3 = np.zeros(3)
+				start_position_3[0:2] = start_position
+				start_position_3[2] = 0.02
 		
 		print('start position is', start_position + np.array([0.6, 0]))
 
-	print('goal position is', target1 + np.array([0.6, 0, 0]), target2 + np.array([0.6, 0, 0]))
-	input()
+	if STACK:
+		print('goal position is', target1 + np.array([0.6, 0, 0]), target2 + np.array([0.6, 0, 0]))
+	else:
+		print('goal position is', target + np.array([0.6, 0, 0]))
+	input('Move Blocks then press enter to continue')
 	task_successful = False
 	for step in range(50):
 		print('step', step)

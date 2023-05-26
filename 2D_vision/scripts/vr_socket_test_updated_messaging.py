@@ -30,11 +30,15 @@ from autolab_core import RigidTransform, Point
 from perception import CameraIntrinsics
 from utils import *
 
-REALSENSE_INTRINSICS = "calib/realsense_intrinsics.intr"
-REALSENSE_EE_TF = "calib/realsense_ee.tf"
+REALSENSE_INTRINSICS = "../calib/realsense_intrinsics.intr"
+REALSENSE_EE_TF = "../calib/realsense_ee_shifted.tf"
 
 ALLOW_PRINT = True
-
+USE_GRIPPER = False
+USE_ROBOHAND = True
+TAG_OFFSET = np.array([0, 0, -0.02])
+COUSTOM_GRIPPER_OFFSET = np.array([0, 0, 0])
+# COUSTOM_GRIPPER_OFFSET =np.array([-0.03, 0, -0.06])
 
 ### SESSION NOTES ###
 # comment out print in utils.get_object_center_point_in_world_realsense_3D_camera_point (131)
@@ -194,7 +198,7 @@ def new_object_message(new_object_list, object_dict):
 	return message
  
 def object_message(object_name, object_dict):
-	pos = object_dict[object_name]._return_current_position()
+	pos = object_dict[object_name]._return_current_position() + TAG_OFFSET
 	vel = object_dict[object_name]._return_current_velocity()
 	rot = object_dict[object_name]._return_current_rotation()
 	avel = object_dict[object_name]._return_current_ang_velocity()
@@ -218,8 +222,8 @@ if __name__ == "__main__":
 	fa = FrankaArm()
 	fa.reset_joints()
 	fa.close_gripper()
-	grip_wrapper = GripperWrapper(fa)
-	COUSTOM_GRIPPER_OFFSET = np.array([-0.06, 0, -0.03])
+	# grip_wrapper = GripperWrapper(fa)
+
 
 	pose = fa.get_pose()
 	goal_rotation = pose.quaternion
@@ -228,7 +232,9 @@ if __name__ == "__main__":
 		print('start socket')
 	#change IP
 	# UdpIP: This computers IP. SendIP: Oculus IP
-	sock = U.UdpComms(udpIP="172.26.58.16", sendIP = "172.26.76.116", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.26.18.135", sendIP = "172.26.33.175", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	if USE_ROBOHAND:
+		hand_sock = U.UdpComms(udpIP="172.26.18.135", sendIP = "172.26.50.162", portTX=8010, portRX=8011, enableRX=True, suppressWarnings=True)
 	# sock = U.UdpComms(udpIP="172.26.58.16", sendIP = "172.26.9.43", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
@@ -238,9 +244,9 @@ if __name__ == "__main__":
 	dt = 0.02
 	
 	rate = rospy.Rate(1 / dt)
-	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, queue_size=10)
+	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, qreseteue_size=10)
 	T = 1000
-	max_speed = 1 # 4 #m/s
+	max_speed = 4 # 4 #m/s
 	break_acc = 20 #m/s^2
 
 	fa = FrankaArm()
@@ -249,7 +255,8 @@ if __name__ == "__main__":
 	fa.reset_joints()
 	pose = fa.get_pose()
 
-	fa.goto_gripper(0, grasp=True)
+	if USE_GRIPPER:
+		fa.goto_gripper(0.04)
 
 	# go to scanning position
 	pose.translation = np.array([0.6, 0, 0.5])
@@ -274,6 +281,8 @@ if __name__ == "__main__":
 	hand_pose = pose
 	goal_position = pose.translation
 	old_message = ""
+	goal_width = 0
+	print('start run loop')
 	while True:
 		previous_pose = hand_pose
 		hand_pose = fa.get_pose()
@@ -281,13 +290,6 @@ if __name__ == "__main__":
 		hand_rot = hand_pose.quaternion
 		finger_width = 0.04 #fa.get_gripper_width() # check this 
 		message_index += 1
-		
-		
-		queue_size = object_queue.qsize()
-		while queue_size > 0:
-			# print("Queue got backed up - removing....")
-			detected_objects = object_queue.get()
-			queue_size = object_queue.qsize()
 
 		# detected_objects = object_queue.get()
 		
@@ -305,7 +307,10 @@ if __name__ == "__main__":
 		for game_object in detected_objects:
 			send_string += object_message(game_object, detected_objects) + '\n'
 		send_hand_position = hand_position + COUSTOM_GRIPPER_OFFSET
-		finger_width = fa.get_gripper_width()
+		if USE_GRIPPER:
+			finger_width = fa.get_gripper_width()
+		else:
+			finger_width = 0
 		send_string += '_hand\t' + str(-send_hand_position[1]) + ',' + str(send_hand_position[2]) + ',' + str(send_hand_position[0]-0.6) +'\t'\
 			+ str(hand_rot[2]) + ',' + str(-hand_rot[3]) + ',' + str(-hand_rot[1]) + ',' + str(hand_rot[0]) + '\t' + str(finger_width)
 
@@ -314,18 +319,19 @@ if __name__ == "__main__":
 
 		# print("Data: ", data)
 		if data != None: # if NEW data has been received since last ReadReceivedData function call
-			if ALLOW_PRINT and old_message != data:
+			if ALLOW_PRINT:# and old_message != data:
 				# print('send_string', send_string)
 				# print()
 				print(data)
 				print('\n')
 				old_message = data
-			inventory, unknown_objects, gripper_data = data.split('\n')
+			inventory, unknown_objects, ee_pose, gripper_data = data.split('\n')
+			gripper_data = gripper_data[:-1] # remove unnessesary tab
 			inventory_list = inventory.split('\t')[1:]
 			new_object_list = unknown_objects.split('\t')[1:]
 			previous_goal_position = goal_position
 
-			goal_position, goal_rotation, goal_width = gripper_data.split('\t')
+			goal_position, goal_rotation = ee_pose.split('\t')
 			cur_pose = hand_pose
 			cur_position = cur_pose.translation
 			goal_position = np.array(goal_position[1:-1].split(', ')).astype(np.float)
@@ -333,7 +339,19 @@ if __name__ == "__main__":
 			goal_position -= COUSTOM_GRIPPER_OFFSET
 			goal_rotation = np.array(goal_rotation[1:-1].split(', ')).astype(np.float)
 			goal_rotation = np.array([goal_rotation[3], -goal_rotation[2], goal_rotation[0], -goal_rotation[1]])
-			goal_width = 2*float(goal_width)
+			if gripper_data != "":
+				gripper = np.array(gripper_data.split('\t')).astype(np.float)
+
+				if gripper.size == 1:
+					goal_width = 2*gripper[0]
+					print('goal width', goal_width)
+				else:
+					goal_width = 0
+					print('using robo hand')
+					if USE_ROBOHAND:
+						hand_sock.SendData(gripper_data)
+			else:
+				print('no gripper message')
 
 			goal_rotation_mat = pose.rotation_from_quaternion(goal_rotation)#@np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]])
 			pose.rotation = goal_rotation_mat
@@ -367,19 +385,18 @@ if __name__ == "__main__":
 				projected_pose = (hand_speed+speed)*time_diff*direction + goal_position
 			pose.translation = goal_position #+ goal_direction*goal_speed*time_diff
 			
-			grip_wrapper.goto(goal_width, 0.15)
-			# while abs(grip_wrapper.last_width-grip_wrapper.get_width()) > 0.003:
-			# 	grip_wrapper.goto(goal_width, 0.15)
-			# 	print('run grip')
-			cur_width = fa.get_gripper_width()
-			if abs(goal_width-cur_width) > 0.0025:
-				print('goal width', goal_width)
-				if goal_width > 0.05 or goal_width > fa.get_gripper_width():
-					fa.goto_gripper(goal_width, block=True, grasp=False)
-					print('grasp == False')
-				else:
-					fa.goto_gripper(goal_width, block=True, grasp=True, speed=0.15, force = 10)
-					print('grasp == True')
+			# grip_wrapper.goto(goal_width, 0.15)
+			if USE_GRIPPER:
+				fa.goto_gripper(goal_width, block=False, speed=0.15, force = 10)
+			# cur_width = fa.get_gripper_width()
+			# if abs(goal_width-cur_width) > 0.0025:
+			# 	print('goal width', goal_width)
+			# 	if goal_width > 0.05 or goal_width > fa.get_gripper_width():
+			# 		fa.goto_gripper(goal_width, block=True, grasp=False)
+			# 		print('grasp == False')
+			# 	else:
+			# 		fa.goto_gripper(goal_width, block=True, grasp=True, speed=0.15, force = 10)
+			# 		print('grasp == True')
 			if initialize:                   
 				# terminate active skills
 				fa.goto_pose(pose, duration=T, dynamic=True, buffer_time=10,

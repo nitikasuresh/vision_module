@@ -26,6 +26,6 @@ while True:
     cv2.imshow("Camera 1", color_image_1)
     cv2.waitKey(1)
 
-    cam1_filename = "scripts/Block_Imgs/" + str(i) + "_cam1.jpg"
-    cv2.imwrite(cam1_filename, color_image_1)
-    i+=1
+    # cam1_filename = "scripts/Block_Imgs/" + str(i) + "_cam1.jpg"
+    # cv2.imwrite(cam1_filename, color_image_1)
+    # i+=1
