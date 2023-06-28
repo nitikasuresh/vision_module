@@ -7,20 +7,28 @@ from os.path import join
 import threading
 from frankapy import FrankaArm
 from autolab_core import RigidTransform
-
-
+import argparse
+# python save_shake_pose.py --grip True
 if __name__ == "__main__":
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--grip", type=bool, default=True)
+    # args = parser.parse_args()
+    
     fa = FrankaArm()
     pose = fa.get_pose()
     
+    
+    
+    ####
+    # fa.goto_gripper(width=0.005, force=160, grasp=True) # speed=0.04 m/s default, 0.025m/0.04m/s = 0.625s # 0.008, force=grip_force, 
     fa.open_gripper()
-    # pose.translation += np.array ([-0.3, 0.0, 0.1])
-    # fa.goto_pose (pose)
-    time.sleep (5)
+    ###
+    
+    time.sleep(2)
 
-    fa.reset_pose()
-
-    fa.reset_joints()
+    #fa.goto_gripper(width=0.005, force=160, grasp=True) # speed=0.04 m/s default, 0.025m/0.04m/s = 0.625s # 0.008, force=grip_force, 
+    # fa.reset_pose()
+    # fa.reset_joints()
     
 #     #fa.goto_pose (pose)
 #     #time.sleep(3)

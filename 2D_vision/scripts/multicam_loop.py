@@ -10,14 +10,14 @@ for each camera.
 W = 848
 H = 480
 
-# # ----- Camera 1 (end-effector) -----
-# REALSENSE_INTRINSICS_CAM_1 = "calib/realsense_intrinsics.intr"
-# REALSENSE_TF_CAM_1 = "calib/realsense_ee.tf"
-# pipeline_1 = rs.pipeline()
-# config_1 = rs.config()
-# config_1.enable_device('220222066259')
-# config_1.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
-# config_1.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
+# ----- Camera 1 (end-effector) -----
+REALSENSE_INTRINSICS_CAM_1 = "calib/realsense_intrinsics.intr"
+REALSENSE_TF_CAM_1 = "calib/realsense_ee.tf"
+pipeline_1 = rs.pipeline()
+config_1 = rs.config()
+config_1.enable_device('220222066259')
+config_1.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
+config_1.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
 
 # ----- Camera 2 (static) -----
 REALSENSE_INTRINSICS_CAM_2 = "calib/realsense_intrinsics_camera2.intr"
@@ -60,26 +60,26 @@ config_5.enable_stream(rs.stream.depth, W, H, rs.format.z16, 30)
 config_5.enable_stream(rs.stream.color, W, H, rs.format.bgr8, 30)
 
 # start streaming
-# pipeline_1.start(config_1)
+pipeline_1.start(config_1)
 pipeline_2.start(config_2)
 pipeline_3.start(config_3)
 pipeline_4.start(config_4)
 pipeline_5.start(config_5)
 
 # align stream
-# aligned_stream_1 = rs.align(rs.stream.color)
+aligned_stream_1 = rs.align(rs.stream.color)
 aligned_stream_2 = rs.align(rs.stream.color)
 aligned_stream_3 = rs.align(rs.stream.color)
 aligned_stream_4 = rs.align(rs.stream.color)
 aligned_stream_5 = rs.align(rs.stream.color)
 
-for i in range(65):
-	# # Camera 1
-	# frames_1 = pipeline_1.wait_for_frames()
-	# frames_1 = aligned_stream_1.process(frames_1)
-	# color_frame_1 = frames_1.get_color_frame()
-	# depth_frame_1 = frames_1.get_depth_frame().as_depth_frame()
-	# color_image_1 = np.asanyarray(color_frame_1.get_data())
+for i in range(650):
+	# Camera 1
+	frames_1 = pipeline_1.wait_for_frames()
+	frames_1 = aligned_stream_1.process(frames_1)
+	color_frame_1 = frames_1.get_color_frame()
+	depth_frame_1 = frames_1.get_depth_frame().as_depth_frame()
+	color_image_1 = np.asanyarray(color_frame_1.get_data())
 
 	# Camera 2
 	frames_2 = pipeline_2.wait_for_frames()
@@ -110,26 +110,27 @@ for i in range(65):
 	color_image_5 = np.asanyarray(color_frame_5.get_data())
 
 	# Show the images
-	# cv2.imshow("Camera 1", color_image_1)
+	cv2.imshow("Camera 1", color_image_1)
 	cv2.imshow("Camera 2", color_image_2)
-	#cv2.imshow("Camera 3", color_image_3)
-	#cv2.imshow("Camera 4", color_image_4)
-	#cv2.imshow("Camera 5", color_image_5)
-	k= cv2.waitKey(0)
-	if k==27:
-		cv2.destroyAllWindows()
-	elif k==ord('s'):
-		print("Saving....")
-		# Save the images
-		# cam1_filename = "scripts/Calib_Imgs/" + i + "_cam1.jpg"
-		cam2_filename = "scripts/Calib_Imgs/" + str(i) + "_cam2.jpg"
-		cam3_filename = "scripts/Calib_Imgs/" + str(i) + "_cam3.jpg"
-		cam4_filename = "scripts/Calib_Imgs/" + str(i) + "_cam4.jpg"
-		cam5_filename = "scripts/Calib_Imgs/" + str(i) + "_cam5.jpg"
+	cv2.imshow("Camera 3", color_image_3)
+	cv2.imshow("Camera 4", color_image_4)
+	cv2.imshow("Camera 5", color_image_5)
+	cv2.waitKey(50)
+cv2.destroyAllWindows()
+	# if k==27:
+	# 	cv2.destroyAllWindows()
+	# elif k==ord('s'):
+	# 	print("Saving....")
+	# 	# Save the images
+	# 	# cam1_filename = "scripts/Calib_Imgs/" + i + "_cam1.jpg"
+	# 	cam2_filename = "scripts/Calib_Imgs/" + str(i) + "_cam2.jpg"
+	# 	cam3_filename = "scripts/Calib_Imgs/" + str(i) + "_cam3.jpg"
+	# 	cam4_filename = "scripts/Calib_Imgs/" + str(i) + "_cam4.jpg"
+	# 	cam5_filename = "scripts/Calib_Imgs/" + str(i) + "_cam5.jpg"
 
-		# cv2.imwrite(cam1_filename, color_image_1)
-		cv2.imwrite(cam2_filename, color_image_2)
-		cv2.imwrite(cam3_filename, color_image_3)
-		cv2.imwrite(cam4_filename, color_image_4)
-		cv2.imwrite(cam5_filename, color_image_5)
+	# 	# cv2.imwrite(cam1_filename, color_image_1)
+	# 	cv2.imwrite(cam2_filename, color_image_2)
+	# 	cv2.imwrite(cam3_filename, color_image_3)
+	# 	cv2.imwrite(cam4_filename, color_image_4)
+	# 	cv2.imwrite(cam5_filename, color_image_5)
 		

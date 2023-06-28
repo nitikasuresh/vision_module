@@ -89,3 +89,5 @@ com = get_object_center_point_in_world_realsense_3D_camera_point(np.array([x,y,z
 # --------- FINAL 3D POINT IN FRANKA WORLD FRAME ----------
 com = np.array([com[0], com[1], com[2]]) # should be the x,y,z position in robot frame
 # NOTE: now, can call goto_pose to this translation for example
+robot_pose.translation = np.array([com[0], com[1], com[2] + 10])
+fa.goto_pose(robot_pose)

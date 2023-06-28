@@ -232,9 +232,9 @@ if __name__ == "__main__":
 		print('start socket')
 	#change IP
 	# UdpIP: This computers IP. SendIP: Oculus IP
-	sock = U.UdpComms(udpIP="172.26.18.135", sendIP = "172.26.33.175", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
+	sock = U.UdpComms(udpIP="172.26.5.54", sendIP = "172.26.33.175", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	if USE_ROBOHAND:
-		hand_sock = U.UdpComms(udpIP="172.26.18.135", sendIP = "172.26.50.162", portTX=8010, portRX=8011, enableRX=True, suppressWarnings=True)
+		hand_sock = U.UdpComms(udpIP="172.26.5.54", sendIP = "172.26.50.162", portTX=8010, portRX=8011, enableRX=True, suppressWarnings=True)
 	# sock = U.UdpComms(udpIP="172.26.58.16", sendIP = "172.26.9.43", portTX=8000, portRX=8001, enableRX=True, suppressWarnings=True)
 	message_index = 0
 	new_object_list = [] # list of all of the objects to render
@@ -244,7 +244,7 @@ if __name__ == "__main__":
 	dt = 0.02
 	
 	rate = rospy.Rate(1 / dt)
-	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup, qreseteue_size=10)
+	pub = rospy.Publisher(FC.DEFAULT_SENSOR_PUBLISHER_TOPIC, SensorDataGroup)#, qreseteue_size=10)
 	T = 1000
 	max_speed = 4 # 4 #m/s
 	break_acc = 20 #m/s^2

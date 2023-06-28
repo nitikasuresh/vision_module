@@ -28,8 +28,8 @@ from frankapy import FrankaArm
 def shake_bottle (fa, rec_duration=11):
     # init_trans = np.load("./init_trans.npy")
     # init_rot = np.load("./init_rot.npy")
-    translation = np.load ("./shake_trans2.npy")
-    rotation = np.load ("./shake_rot2.npy")
+    translation = np.load ("../shake_trans2.npy")
+    rotation = np.load ("../shake_rot2.npy")
 
     saved_pose = fa.get_pose ()
     print (saved_pose)
@@ -64,7 +64,7 @@ def shake_bottle (fa, rec_duration=11):
 
 
 grip_force = 160
-num_videos = 9
+num_videos = 10
 
 if __name__ == "__main__":
     print ("Initializing FrankaArm")
@@ -82,9 +82,9 @@ if __name__ == "__main__":
     # time.sleep (time_to_give_bottle)
 
     # # close gripper around bottle
-    print (f"Closing gripper (F = {grip_force} N)")
-    fa.goto_gripper(width=0.005, force=grip_force, grasp=True) # speed=0.04 m/s default, 0.025m/0.04m/s = 0.625s # 0.008, force=grip_force, 
-    time.sleep(3)
+    # print (f"Closing gripper (F = {grip_force} N)")
+    # fa.goto_gripper(width=0.005, force=grip_force, grasp=True) # speed=0.04 m/s default, 0.025m/0.04m/s = 0.625s # 0.008, force=grip_force, 
+    # time.sleep(3)
     
     # After closing the gripper (robot holding bottle)
     # robot shakes for 'num_videos' times
